@@ -12,17 +12,26 @@ const firebaseConfig = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Prevent duplicate app initialization
-const app = getApps().length === 0
-  ? initializeApp(firebaseConfig)
-  : getApps()[0];
+// ---------------------------------------------------------------------------
+// App — Prevent duplicate initialization (safe for hot-reload)
+// ---------------------------------------------------------------------------
+let app;
+try {
+  app = getApps().length === 0
+    ? initializeApp(firebaseConfig)
+    : getApps()[0];
+} catch (e) {
+  console.warn('[Firebase] App init error, attempting recovery:', e);
+  app = getApps()[0];
+}
 
-// Enable Firestore Offline Persistence with hot-reload safety
+// ---------------------------------------------------------------------------
+// Firestore — Offline persistence with hot-reload safety
+// ---------------------------------------------------------------------------
 let dbInstance;
 try {
-  // Try to retrieve existing instance if already initialized (hot reload)
   dbInstance = getFirestore(app);
-} catch (e) {
+} catch (_) {
   try {
     dbInstance = initializeFirestore(app, {
       localCache: persistentLocalCache({
@@ -31,7 +40,7 @@ try {
           : persistentSingleTabManager({}),
       }),
     });
-  } catch (error: any) {
+  } catch (_inner) {
     dbInstance = getFirestore(app);
   }
 }
@@ -39,36 +48,53 @@ try {
 export const db = dbInstance;
 
 // ---------------------------------------------------------------------------
-// Auth — Setup cross-platform persistence (AsyncStorage for mobile, BrowserLocal for web)
+// Auth — CRITICAL: On React Native, we MUST use initializeAuth() with
+// getReactNativePersistence(AsyncStorage) as the FIRST call. Calling
+// getAuth() first silently sets indexedDB persistence (web-only), which
+// causes an asynchronous crash on Android.
+//
+// getAuth() is ONLY safe as a fallback when auth is already initialized
+// (e.g., during hot-reload).
 // ---------------------------------------------------------------------------
 let authInstance: ReturnType<typeof getAuth>;
 
 try {
-  // Try to retrieve existing instance if already initialized (hot reload)
-  authInstance = getAuth(app);
-} catch (e) {
-  try {
-    const persistence = Platform.OS === 'web'
-      ? browserLocalPersistence
-      : (() => {
-          const { getReactNativePersistence } = require('firebase/auth');
-          const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-          return getReactNativePersistence(AsyncStorage);
-        })();
+  if (Platform.OS === 'web') {
+    // Web: initializeAuth with browserLocalPersistence, fall back to getAuth
+    try {
+      authInstance = initializeAuth(app, {
+        persistence: browserLocalPersistence,
+      });
+    } catch (_) {
+      // Already initialized (hot-reload) — safe to use getAuth on web
+      authInstance = getAuth(app);
+    }
+  } else {
+    // React Native (Android/iOS): MUST use initializeAuth with AsyncStorage
+    try {
+      const { getReactNativePersistence } = require('firebase/auth');
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
 
-    authInstance = initializeAuth(app, {
-      persistence,
-    });
-  } catch (error: any) {
-    // Fallback if initializeAuth fails due to double initialization race conditions
-    authInstance = getAuth(app);
+      authInstance = initializeAuth(app, {
+        persistence: getReactNativePersistence(AsyncStorage),
+      });
+    } catch (initError: any) {
+      // initializeAuth throws "already-initialized" on hot-reload — safe to fallback
+      if (initError?.code === 'auth/already-initialized') {
+        authInstance = getAuth(app);
+      } else {
+        // Log but don't crash — fall back to getAuth as last resort
+        console.warn('[Firebase] Auth init error:', initError?.message || initError);
+        authInstance = getAuth(app);
+      }
+    }
   }
+} catch (outerError) {
+  console.error('[Firebase] Critical auth error, falling back to getAuth:', outerError);
+  authInstance = getAuth(app);
 }
 
 export const auth = authInstance;
-
-// Functions is not used in the mobile app; commented out to prevent startup crashes on Android
-// export const functions = require('firebase/functions').getFunctions(app);
 
 export { app };
 export default app;
