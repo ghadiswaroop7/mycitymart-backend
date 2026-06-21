@@ -67,7 +67,8 @@ try {
 
 export const auth = authInstance;
 
-export const functions = require('firebase/functions').getFunctions(app);
+// Functions is not used in the mobile app; commented out to prevent startup crashes on Android
+// export const functions = require('firebase/functions').getFunctions(app);
 
 export { app };
 export default app;
