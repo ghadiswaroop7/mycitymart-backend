@@ -8,7 +8,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { GoogleAuthProvider, signInWithCredential, signInWithPhoneNumber, PhoneAuthProvider } from 'firebase/auth';
 import { app, auth, db } from '../config/firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
+import FirebaseRecaptchaVerifierModal from '../components/FirebaseRecaptchaVerifierModal';
 
 WebBrowser.maybeCompleteAuthSession();
 

@@ -4,13 +4,7 @@
     "slug": "jhat-pat-mobile-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "newArchEnabled": false,
     "icon": "./assets/icon.png",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#1E8A3C"
-    },
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true
@@ -41,7 +35,14 @@
       "url": "https://u.expo.dev/8884256b-61fa-4e24-8287-6bca7730c63a"
     },
     "plugins": [
-      "expo-splash-screen",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#1E8A3C"
+        }
+      ],
       "expo-font"
     ]
   }
