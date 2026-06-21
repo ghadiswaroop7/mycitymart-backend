@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .font-premium-heading {
+    font-family: Poppins_700Bold;
+    color: #1A1A1A;
+  }
+  .font-premium-body {
+    font-family: Poppins_300Light;
+    color: #1A1A1A;
+  }
+}

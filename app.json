@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "jhat-pat-mobile-app",
+    "slug": "jhat-pat-mobile-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "newArchEnabled": false,
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1E8A3C"
+    },
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "scheme": "jhatpat",
+    "android": {
+      "package": "com.jhatpat.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "8884256b-61fa-4e24-8287-6bca7730c63a"
+      }
+    },
+    "owner": "vibecoderswaroop",
+    "updates": {
+      "url": "https://u.expo.dev/8884256b-61fa-4e24-8287-6bca7730c63a"
+    },
+    "plugins": [
+      "expo-splash-screen",
+      "expo-font"
+    ]
+  }
+}

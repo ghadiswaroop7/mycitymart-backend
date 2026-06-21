@@ -1,0 +1,31 @@
+export interface Product {
+  id: string;
+  name: string;
+  brand?: string;
+  description?: string;
+  price: number;
+  originalPrice?: number;
+  images: string[];
+  videoUrl?: string;
+  colors?: string[];
+  sizes?: string[];
+  keyFeatures?: string[];
+  material?: string;
+  fabric?: string;
+  careInstructions?: string;
+  rating?: number;
+  reviewCount?: number;
+  stock?: number;
+  inStock?: boolean;
+  status?: 'Active' | 'Inactive' | 'Out of Stock';
+  category?: string;
+  subcategory?: string;
+  tags?: string[];
+  sku?: string;
+  shop_id?: string;
+  shop_name?: string;
+  seller?: string;
+  vendor?: string;
+  createdAt?: any;
+  updatedAt?: any;
+}

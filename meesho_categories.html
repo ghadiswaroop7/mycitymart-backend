@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meesho Categories Sync Scroll Demo</title>
+  <style>
+    /* ─── DESKTOP/CONTAINER WRAPPER STYLES ─── */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      overflow: hidden;
+      color: #f8fafc;
+    }
+
+    /* Outer layout wrapper */
+    .dashboard-container {
+      display: flex;
+      gap: 40px;
+      align-items: center;
+      max-width: 1100px;
+      width: 100%;
+      justify-content: center;
+    }
+
+    /* Left Info Card (Premium Glassmorphism) */
+    .info-card {
+      flex: 1;
+      max-width: 420px;
+      background: rgba(255, 255, 255, 0.03);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 24px;
+      padding: 32px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .info-card {
+        display: none;
+      }
+      body {
+        overflow: auto;
+      }
+    }
+
+    .info-card h1 {
+      font-size: 28px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #f472b6 0%, #c084fc 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1.2;
+    }
+
+    .info-card p {
+      font-size: 14px;
+      color: #94a3b8;
+      line-height: 1.6;
+    }
+
+    .feature-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(139, 47, 201, 0.15);
+      border: 1px solid rgba(139, 47, 201, 0.3);
+      color: #e9d5ff;
+      padding: 6px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      width: fit-content;
+    }
+
+    .features-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 13.5px;
+      color: #cbd5e1;
+    }
+
+    .feature-item svg {
+      width: 18px;
+      height: 18px;
+      color: #a78bfa;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    /* ─── REALISTIC PHONE MOCKUP STYLES ─── */
+    .phone-mockup {
+      width: 375px;
+      height: 812px;
+      background: #222;
+      border-radius: 40px;
+      border: 12px solid #1e293b;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.1);
+      position: relative;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    /* Status Bar */
+    .phone-status-bar {
+      height: 34px;
+      background: #ffffff;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 24px 0 24px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #000;
+      z-index: 1000;
+      position: relative;
+    }
+
+    .phone-status-icons {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    /* Screen container (100dvh equivalent in fixed height) */
+    .screen-container {
+      width: 100%;
+      height: 742px; /* 812px - 12px border - 34px status - 24px bottom bar */
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      color: #111;
+    }
+
+    /* Phone Home Indicator */
+    .phone-home-indicator-bar {
+      height: 24px;
+      background: #ffffff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      position: relative;
+    }
+
+    .phone-home-indicator {
+      width: 120px;
+      height: 5px;
+      background: #111;
+      border-radius: 10px;
+    }
+
+    /* ─── APP HEADER ─── */
+    .app-header {
+      height: 48px;
+      background: #ffffff;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 16px;
+      border-bottom: 1px solid #eeeeee;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+      flex-shrink: 0;
+    }
+
+    .app-header h2 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #111111;
+      letter-spacing: 0.5px;
+    }
+
+    .header-icons {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .header-icon-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .header-icon-btn svg {
+      width: 20px;
+      height: 20px;
+      stroke: #111111;
+      stroke-width: 2px;
+      fill: none;
+    }
+
+    .cart-badge {
+      position: absolute;
+      top: -2px;
+      right: -2px;
+      background: #8B2FC9; /* Meesho Purple badge tint */
+      color: #ffffff;
+      font-size: 8px;
+      font-weight: 800;
+      border-radius: 50%;
+      width: 14px;
+      height: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ─── MAIN APP CONTAINER ─── */
+    .main-body {
+      display: flex;
+      flex-direction: row;
+      height: calc(100% - 48px - 52px); /* 48px header + 52px bottom nav */
+      width: 100%;
+      overflow: hidden; /* NO overflow on main wrapper itself */
+    }
+
+    /* ─── LEFT SIDEBAR ─── */
+    .left-sidebar {
+      width: 90px; /* FIXED, do NOT use percentage */
+      min-width: 90px;
+      max-width: 90px;
+      flex-shrink: 0; /* CRITICAL, prevents shrinking */
+      height: 100%;
+      overflow-y: auto;
+      background: #f0f0f0;
+      scrollbar-width: none; /* Firefox */
+      -ms-overflow-style: none; /* IE and Edge */
+    }
+
+    .left-sidebar::-webkit-scrollbar {
+      display: none; /* Chrome, Safari, Opera */
+    }
+
+    .sidebar-item {
+      width: 100%;
+      padding: 10px 4px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #f0f0f0;
+      border-bottom: 1px solid #e8e8e8;
+      cursor: pointer;
+      position: relative;
+      transition: background-color 0.2s ease, border-left-color 0.2s ease;
+      text-decoration: none;
+      outline: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .sidebar-icon-circle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #ffffff;
+      font-size: 24px;
+      border: 2px solid transparent;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+      transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .sidebar-label {
+      display: block;
+      font-size: 10px;
+      text-align: center;
+      word-break: break-word;
+      margin-top: 4px;
+      color: #444444;
+      font-weight: 500;
+      line-height: 1.3;
+      width: 100%;
+      transition: color 0.2s ease, font-weight 0.2s ease;
+    }
+
+    /* ACTIVE Sidebar State */
+    .sidebar-item.active {
+      background: #ffffff;
+      border-left: 3px solid #8B2FC9; /* Meesho Purple */
+    }
+
+    .sidebar-item.active .sidebar-label {
+      color: #8B2FC9;
+      font-weight: 600;
+    }
+
+    .sidebar-item.active .sidebar-icon-circle {
+      border-color: rgba(139, 47, 201, 0.3);
+      transform: scale(1.04);
+    }
+
+    /* ─── RIGHT PANEL ─── */
+    .right-panel {
+      flex: 1; /* takes remaining space */
+      min-width: 0; /* CRITICAL, prevents overflow */
+      height: 100%;
+      overflow-y: auto;
+      background: #ffffff;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      padding: 12px 10px;
+    }
+
+    .right-panel::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* Category Section container */
+    .category-section {
+      padding-bottom: 30px;
+    }
+
+    .section-breadcrumb {
+      font-size: 10px;
+      color: #999999;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-weight: 600;
+      margin-top: 10px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .section-divider {
+      width: 100%;
+      height: 1px;
+      border-bottom: 1px solid #ddd;
+      margin-bottom: 12px;
+    }
+
+    .subsection-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #111111;
+      margin: 12px 0 10px 0;
+      display: block;
+      text-transform: capitalize;
+    }
+
+    /* Product Grid */
+    .product-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr); /* exactly 3 columns */
+      gap: 8px;
+      width: 100%;
+      margin-bottom: 16px;
+    }
+
+    .product-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      cursor: pointer;
+      text-decoration: none;
+      outline: none;
+      -webkit-tap-highlight-color: transparent;
+      margin-bottom: 10px;
+    }
+
+    .product-image-container {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      background: #f0f0f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      margin: 0 auto;
+      box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.03);
+      transition: transform 0.2s ease;
+      object-fit: cover;
+    }
+
+    .product-item:hover .product-image-container {
+      transform: scale(1.05);
+    }
+
+    .product-label {
+      font-size: 10px;
+      margin-top: 4px;
+      word-wrap: break-word;
+      max-width: 70px;
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+      color: #333333;
+      text-align: center;
+      line-height: 1.3;
+    }
+
+    /* ─── BOTTOM NAV BAR ─── */
+    .bottom-nav {
+      height: 52px;
+      background: #ffffff;
+      border-top: 1px solid #eeeeee;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      flex-shrink: 0;
+      z-index: 100;
+      position: relative;
+    }
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      height: 100%;
+      cursor: pointer;
+      text-decoration: none;
+      outline: none;
+      -webkit-tap-highlight-color: transparent;
+      color: #888888;
+      transition: color 0.15s ease;
+    }
+
+    .nav-icon {
+      font-size: 20px;
+      margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 22px;
+    }
+
+    .nav-label {
+      font-size: 9.5px;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    /* Active Bottom Nav State */
+    .nav-item.active {
+      color: #2874f0; /* Accent Blue */
+    }
+
+    /* Toast Notification */
+    .toast-notif {
+      position: absolute;
+      bottom: 70px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(17, 24, 39, 0.95);
+      color: #ffffff;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+      z-index: 2000;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .toast-notif.show {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="dashboard-container">
+    
+    <!-- Left Dashboard Info Panel (Visible on Desktop) -->
+    <div class="info-card">
+      <div class="feature-badge">
+        <span>✨</span> Fully Interactive Prototype
+      </div>
+      <h1>Meesho Categories screen</h1>
+      <p>
+        Experience a pixel-perfect mockup of the Meesho categories layout, including high-performance bi-directional sync scrolling (scroll spy) and dynamic sidebar centering.
+      </p>
+      
+      <div class="features-list">
+        <div class="feature-item">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+          <span><strong>Bi-directional Scrolling</strong>: Click sidebar items to jump, or scroll the right panel to automatically update the sidebar highlights.</span>
+        </div>
+        <div class="feature-item">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+          <span><strong>Auto-Centering</strong>: Selected active sidebar categories automatically slide smoothly into the middle of the vertical viewport.</span>
+        </div>
+        <div class="feature-item">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+          <span><strong>Huge Real Catalog</strong>: Fully populated with all 19 official Meesho categories and layout subsections.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phone Shell Wrapper -->
+    <div class="phone-mockup">
+      
+      <!-- Phone Status Bar -->
+      <div class="phone-status-bar">
+        <div class="phone-time">12:30</div>
+        <div class="phone-status-icons">
+          <span>5G</span>
+          <span>📶</span>
+          <span>🔋 98%</span>
+        </div>
+      </div>
+
+      <!-- App Screen Content -->
+      <div class="screen-container">
+        
+        <!-- App Top Header -->
+        <header class="app-header">
+          <h2>CATEGORIES</h2>
+          <div class="header-icons">
+            <button class="header-icon-btn" onclick="showToast('Search Clicked')">
+              <svg viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button class="header-icon-btn" onclick="showToast('Wishlist Clicked')">
+              <svg viewBox="0 0 24 24"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button class="header-icon-btn" onclick="showToast('Cart Clicked')">
+              <svg viewBox="0 0 24 24"><path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <div class="cart-badge">5</div>
+            </button>
+          </div>
+        </header>
+
+        <!-- Main Content (Two Column Panels) -->
+        <div class="main-body">
+          
+          <!-- Left Sidebar Scrollable -->
+          <aside class="left-sidebar" id="left-sidebar">
+            <!-- Dynamically populated -->
+          </aside>
+
+          <!-- Right Content Panel Scrollable -->
+          <main class="right-panel" id="right-panel">
+            <!-- Dynamically populated -->
+          </main>
+
+        </div>
+
+        <!-- Toast Alert Inside App Screen -->
+        <div class="toast-notif" id="app-toast">Added to cart!</div>
+
+        <!-- Bottom Navigation Bar -->
+        <nav class="bottom-nav">
+          <div class="nav-item" onclick="showToast('Home Clicked')">
+            <div class="nav-icon">🏠</div>
+            <div class="nav-label">Home</div>
+          </div>
+          <div class="nav-item active">
+            <div class="nav-icon">👔</div>
+            <div class="nav-label">Categories</div>
+          </div>
+          <div class="nav-item" onclick="showToast('Mall Clicked')">
+            <div class="nav-icon">🏪</div>
+            <div class="nav-label">Mall</div>
+          </div>
+          <div class="nav-item" onclick="showToast('Video Finds Clicked')">
+            <div class="nav-icon">▶️</div>
+            <div class="nav-label">Video Finds</div>
+          </div>
+          <div class="nav-item" onclick="showToast('My Orders Clicked')">
+            <div class="nav-icon">📦</div>
+            <div class="nav-label">My Orders</div>
+          </div>
+        </nav>
+
+      </div>
+
+      <!-- Phone Bottom Home Bar -->
+      <div class="phone-home-indicator-bar">
+        <div class="phone-home-indicator"></div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    // ─── DATA DESCRIPTION (19 Complete Categories) ───
+    const categories = [
+      {
+        id: "popular",
+        name: "Popular",
+        emoji: "⭐",
+        bgColor: "#FFE5EC",
+        sections: [
+          {
+            title: "Featured On Meesho",
+            items: [
+              { name: "Top Brands", emoji: "🏷️", valColor: "#E8F8F5" },
+              { name: "Premium Collection", emoji: "✨", valColor: "#FEF9E7" },
+              { name: "Fruits", emoji: "🍎", valColor: "#FFF3E0" },
+              { name: "Cookware", emoji: "🍳", valColor: "#F4ECF7" }
+            ]
+          },
+          {
+            title: "All Popular",
+            items: [
+              { name: "Kurtis & Dress Materials", emoji: "👘", valColor: "#FFE5EC" },
+              { name: "Sarees", emoji: "🥻", valColor: "#EBF5FB" },
+              { name: "Westernwear", emoji: "👗", valColor: "#E8F8F5" },
+              { name: "Jewellery", emoji: "💍", valColor: "#FDF2E9" },
+              { name: "Men Fashion", emoji: "👔", valColor: "#E8F0FE" },
+              { name: "Kids", emoji: "🧸", valColor: "#E6F9EC" },
+              { name: "Footwear", emoji: "👟", valColor: "#F5F5F5" },
+              { name: "Beauty & Personal Care", emoji: "💄", valColor: "#FBE5E5" },
+              { name: "Grocery", emoji: "🛒", valColor: "#FCF3CF" },
+              { name: "Accessories", emoji: "👜", valColor: "#EAFAF1" },
+              { name: "Electronics", emoji: "💻", valColor: "#EAECEE" },
+              { name: "Home Decor", emoji: "🏠", valColor: "#F5EEF8" }
+            ]
+          }
+        ]
+      },
+      {
+        id: "kurti_saree_lehenga",
+        name: "Kurti, Saree & Lehenga",
+        emoji: "👘",
+        bgColor: "#FFF0F5",
+        sections: [
+          {
+            title: "Kurtis",
+            items: [
+              { name: "All Kurtis", emoji: "👘", valColor: "#FFE5EC" },
+              { name: "Printed Kurtis", emoji: "🌸", valColor: "#E8F8F5" },
+              { name: "Plain Kurtis", emoji: "🎨", valColor: "#FCF3CF" },
+              { name: "Kurti Sets", emoji: "👚", valColor: "#F4ECF7" }
+            ]
+          },
+          {
+            title: "Sarees",
+            items: [
+              { name: "All Sarees", emoji: "🥻", valColor: "#E8F0FE" },
+              { name: "Silk Sarees", emoji: "🕸️", valColor: "#EBF5FB" },
+              { name: "Cotton Sarees", emoji: "🌱", valColor: "#E6F9EC" },
+              { name: "Party Wear", emoji: "🎉", valColor: "#FFF3E0" }
+            ]
+          },
+          {
+            title: "Lehenga",
+            items: [
+              { name: "All Lehenga", emoji: "💃", valColor: "#FBE5E5" },
+              { name: "Bridal", emoji: "👰", valColor: "#FEF9E7" },
+              { name: "Designer", emoji: "👑", valColor: "#EAFAF1" }
+            ]
+          }
+        ]
+      },
+      {
+        id: "women_western",
+        name: "Women Western",
+        emoji: "👗",
+        bgColor: "#E2F0D9",
+        sections: [
+          {
+            title: "Topwear",
+            items: [
+              { name: "All Topwear", emoji: "👚", valColor: "#FFE5EC" },
+              { name: "Tops & Tunics", emoji: "👚", valColor: "#E8F0FE" },
+              { name: "Dresses", emoji: "👗", valColor: "#FEF9E7" },
+              { name: "T-shirts", emoji: "👕", valColor: "#E6F9EC" },
+              { name: "Gowns", emoji: "👗", valColor: "#FFF3E0" },
+              { name: "Tops & Bottom Sets", emoji: "👖", valColor: "#FBE5E5" },
+              { name: "Shirts", emoji: "👔", valColor: "#EBF5FB" },
+              { name: "Jumpsuits", emoji: "🥋", valColor: "#E8F8F5" },
+              { name: "New Trends", emoji: "🔥", valColor: "#F4ECF7" }
+            ]
+          },
+          {
+            title: "Bottomwear",
+            items: [
+              { name: "All Bottomwear", emoji: "👖", valColor: "#E6F9EC" },
+              { name: "Jeans & Jeggings", emoji: "👖", valColor: "#E8F0FE" },
+              { name: "Palazzos", emoji: "👖", valColor: "#FCF3CF" },
+              { name: "Trousers & Pants", emoji: "👖", valColor: "#F5EEF8" },
+              { name: "Leggings", emoji: "👖", valColor: "#FFE5EC" },
+              { name: "Shorts & Skirts", emoji: "👗", valColor: "#FBE5E5" }
+            ]
+          },
+          {
+            title: "Winterwear",
+            items: [
+              { name: "Jackets", emoji: "🧥", valColor: "#EBF5FB" },
+              { name: "Sweaters", emoji: "🧶", valColor: "#EAFAF1" },
+              { name: "Cardigans", emoji: "🧥", valColor: "#FFF3E0" }
+            ]
+          }
+        ]
+      },
+      {
+        id: "lingerie",
+        name: "Lingerie",
+        emoji: "🩱",
+        bgColor: "#FBE5E5",
+        sections: [
+          {
+            title: "Innerwear",
+            items: [
+              { name: "Bra & Bralettes", emoji: "👙", valColor: "#FFE5EC" },
+              { name: "Panties", emoji: "🩲", valColor: "#EBF5FB" },
+              { name: "Lingerie Sets", emoji: "🩱", valColor: "#FBE5E5" },
+              { name: "Shapewear", emoji: "👙", valColor: "#F4ECF7" },
+              { name: "Camisoles & Inners", emoji: "🎽", valColor: "#E8F8F5" },
+              { name: "Straps Tapes & Pasties", emoji: "🎗️", valColor: "#FCF3CF" }
+            ]
+          },
+          {
+            title: "Sleepwear",
+            items: [
+              { name: "Women Nightsuits", emoji: "🥋", valColor: "#E6F9EC" },
+              { name: "Women Nightdress", emoji: "👗", valColor: "#E8F0FE" },
+              { name: "Other Sleepwear", emoji: "👚", valColor: "#FFF3E0" }
+            ]
+          },
+          {
+            title: "Sports Wear",
+            items: [
+              { name: "Sports Bottomwear", emoji: "🩳", valColor: "#E8F8F5" },
+              { name: "Sports Bra", emoji: "🏃‍♀️", valColor: "#FFE5EC" },
+              { name: "Top & Bottom Sets", emoji: "🧘‍♀️", valColor: "#F5EEF8" }
+            ]
+          },
+          {
+            title: "Maternity Wear",
+            items: [
+              { name: "Kurti & Topwear", emoji: "🤰", valColor: "#FEF9E7" },
+              { name: "Feeding Bras", emoji: "🍼", valColor: "#FBE5E5" },
+              { name: "Briefs", emoji: "🩲", valColor: "#EAFAF1" }
+            ]
+          }
+        ]
+      },
+      {
+        id: "men",
+        name: "Men",
+        emoji: "👔",
+        bgColor: "#E8F0FE",
+        sections: [
+          {
+            title: "Top Wear",
+            items: [
+              { name: "Summer T-Shirts", emoji: "👕", valColor: "#E8F0FE" },
+              { name: "Shirts", emoji: "👔", valColor: "#EBF5FB" },
+              { name: "T-Shirts Combos", emoji: "📦", valColor: "#FFE5EC" }
+            ]
+          },
+          {
+            title: "Bottom Wear",
+            items: [
+              { name: "Jeans", emoji: "👖", valColor: "#EAECEE" },
+              { name: "Cargos/Trousers", emoji: "👖", valColor: "#E6F9EC" },
+              { name: "Dhotis/Lungis", emoji: "🧣", valColor: "#FFF3E0" }
+            ]
+          },
+          {
+            title: "Ethnic Wear",
+            items: [
+              { name: "Kurtas", emoji: "🥋", valColor: "#FBE5E5" },
+              { name: "Kurta Sets", emoji: "👔", valColor: "#F4ECF7" },
+              { name: "Nehru Jacket", emoji: "🧥", valColor: "#E8F8F5" }
+            ]
+          },
+          {
+            title: "Innerwear",
+            items: [
+              { name: "Vests", emoji: "🎽", valColor: "#FCF3CF" },
+              { name: "Briefs", emoji: "🩲", valColor: "#E8F0FE" },
+              { name: "Boxers", emoji: "🩳", valColor: "#FEF9E7" }
+            ]
+          },
+          {
+            title: "Sports Wear",
+            items: [
+              { name: "Sports Tees", emoji: "👕", valColor: "#E6F9EC" },
+              { name: "Track Pants", emoji: "👖", valColor: "#EBF5FB" },
+              { name: "Running Shorts", emoji: "🩳", valColor: "#FFE5EC" }
+            ]
+          }
+        ]
+      },
+      {
+        id: "kids_toys",
+        name: "Kids & Toys",
+        emoji: "🧸",
+        bgColor: "#EAF2F8",
+        sections: [
+          {
+            title: "Kids Clothing",
+            items: [
+              { name: "Girls", emoji: "👧", valColor: "#FFE5EC" },
+              { name: "Boys", emoji: "👦", valColor: "#E8F0FE" },
+              { name: "Babies", emoji: "👶", valColor: "#FEF9E7" },
+              { name: "Clothing Sets", emoji: "👚", valColor: "#E6F9EC" },
+              { name: "Frocks & Dresses", emoji: "👗", valColor: "#FBE5E5" },
+              { name: "T-Shirt & Polos", emoji: "👕", valColor: "#EBF5FB" }
+            ]
+          },
+          {
+            title: "Kids Toys",
+            items: [
+              { name: "Toys & Games", emoji: "🧸", valColor: "#F4ECF7" },
+              { name: "Perfect Gifting", emoji: "🎁", valColor: "#FFF3E0" },
+              { name: "Best Sellers", emoji: "🏆", valColor: "#E8F8F5" },
+              { name: "Baby Gears", emoji: "🚼", valColor: "#FCF3CF" }
+            ]
+          },
+          {
+            title: "Kids Accessories",
+            items: [
+              { name: "Bags & Backpacks", emoji: "🎒", valColor: "#E6F9EC" },
+              { name: "Kids Accessories", emoji: "🕶️", valColor: "#FFE5EC" },
+              { name: "Party Items", emoji: "🎉", valColor: "#E8F0FE" }
+            ]
+          },
+          {
+            title: "Baby Care",
+            items: [
+              { name: "Baby Wipes", emoji: "🧼", valColor: "#FEF9E7" },
+              { name: "Baby Lotions", emoji: "🧴", valColor: "#FBE5E5" },
+              { name: "Baby Powder", emoji: "🍼", valColor: "#EAFAF1" }
+            ]
+          }
+        ]
+      },
+      {
+        id: "home_kitchen",
+        name: "Home & Kitchen",
+        emoji: "🏠",
+        bgColor: "#FFF2E6",
+        sections: [
+          {
+            title: "Home Decor",
+            items: [
+              { name: "View All", emoji: "🖼️", valColor: "#F5EEF8" },
+              { name: "Covers", emoji: "🛋️", valColor: "#EBF5FB" },
+              { name: "Key Holders", emoji: "🔑", valColor: "#FEF9E7" },
+              { name: "Artificial Plants", emoji: "🪴", valColor: "#E6F9EC" },
+              { name: "Pooja Needs", emoji: "🪔", valColor: "#FFF3E0" },
+              { name: "Party Supplies", emoji: "🎈", valColor: "#FFE5EC" },
+              { name: "Wallpapers & Stickers", emoji: "📜", valColor: "#E8F0FE" },
+              { name: "Showpieces & Idols", emoji: "🗿", valColor: "#F4ECF7" },
+              { name: "Clocks & Wall Decor", emoji: "🕰️", valColor: "#FCF3CF" }
+            ]
+          },
+          {
+            title: "Kitchen & Appliances",
+            items: [
+              { name: "View All", emoji: "🍽️", valColor: "#E8F8F5" },
+              { name: "Storage & Organizers", emoji: "📦", valColor: "#FFE5EC" },
+              { name: "Cookware", emoji: "🥘", valColor: "#FBE5E5" },
+              { name: "Kitchen Tools", emoji: "🔪", valColor: "#EBF5FB" },
+              { name: "Kitchen Appliances", emoji: "🔌", valColor: "#EAECEE" },
+              { name: "Dinnerware", emoji: "🥣", valColor: "#EAFAF1" }
+            ]
+          }
+        ]
+      },
+      {
+        id: "beauty_health",
+        name: "Beauty & Health",
+        emoji: "💄",
+        bgColor: "#FCE8E6",
+        sections: [
+          {
+            title: "Makeup",
+            items: [
+              { name: "Lipstick", emoji: "💄", valColor: "#FBE5E5" },
+              { name: "Eye Shadow & Liner", emoji: "👁️", valColor: "#EBF5FB" },
+              { name: "Face Makeup", emoji: "🧴", valColor: "#FEF9E7" },
+              { name: "Makeup Kits & Combos", emoji: "👝", valColor: "#F4ECF7" },
+              { name: "Hair Curlers", emoji: "💇‍♀️", valColor: "#FFE5EC" },
+              { name: "Nail Makeup", emoji: "💅", valColor: "#E6F9EC" },
+              { name: "Brushes & Accessories", emoji: "🖌️", valColor: "#E8F0FE" },
+              { name: "Hair Removal", emoji: "🪒", valColor: "#EAECEE" },
+              { name: "Perfumes & More", emoji: "🧪", valColor: "#FFF3E0" }
+            ]
+          },
+          {
+            title: "Personal Care",
+            items: [
+              { name: "View All", emoji: "🧴", valColor: "#E8F8F5" },
+              { name: "Body Lotion", emoji: "🧴", valColor: "#FBE5E5" },
+              { name: "Hair Oil & Shampoo", emoji: "🧴", valColor: "#EAFAF1" },
+              { name: "Whitening Creams", emoji: "🧴", valColor: "#FFE5EC" },
+              { name: "Straighteners & Dryers", emoji: "🔌", valColor: "#E8F0FE" },
+              { name: "Face Oil & Serum", emoji: "🧪", valColor: "#FCF3CF" }
+            ]
+          }
+        ]
+      },
+      {
+        id: "jewellery_accessories",
+        name: "Jewellery & Accessories",
+        emoji: "💍",
+        bgColor: "#EBF5FB",
+        sections: [
+          {
+            title: "Jewellery",
+            items: [
+              { name: "All Jewellery", emoji: "💍", valColor: "#FEF9E7" },
+              { name: "Jewellery Sets", emoji: "💎", valColor: "#EBF5FB" },
+              { name: "Earrings", emoji: "👂", valColor: "#FFE5EC" },
+              { name: "Mangalsutras", emoji: "📿", valColor: "#E6F9EC" },
+              { name: "Necklaces & Chains", emoji: "📿", valColor: "#F4ECF7" },
+              { name: "Bangles & Bracelets", emoji: "💍", valColor: "#E8F0FE" },
+              { name: "Anklets & Nosepins", emoji: "👃", valColor: "#FBE5E5" },
+              { name: "Kamarbandh & Maangtika", emoji: "👑", valColor: "#FFF3E0" }
+            ]
+          },
+          {
+            title: "Men Accessories",
+            items: [
+              { name: "All Accessories", emoji: "👓", valColor: "#E8F8F5" },
+              { name: "Men Watches", emoji: "⌚", valColor: "#EAECEE" },
+              { name: "Wallets", emoji: "👛", valColor: "#FCF3CF" },
+              { name: "Men Jewellery", emoji: "💍", valColor: "#FEF9E7" },
+              { name: "Sunglasses & Spectacles", emoji: "🕶️", valColor: "#EBF5FB" },
+              { name: "Belts", emoji: "👖", valColor: "#FFE5EC" }
+            ]
+          },
+          {
+            title: "Women Accessories",
+            items: [
+              { name: "Hair Accessories", emoji: "🎀", valColor: "#E6F9EC" },
+              { name: "Handbags", emoji: "👜", valColor: "#FBE5E5" },
+              { name: "Clutches", emoji: "👛", valColor: "#F5EEF8" }
+            ]
+          }
+        ]
+      },
+      {
+        id: "bags_footwear",
+        name: "Bags & Footwear",
+        emoji: "👜",
+        bgColor: "#EAECEE",
+        sections: [
+          {
+            title: "Women Footwear",
+            items: [
+              { name: "View All", emoji: "👠", valColor: "#FFE5EC" },
+              { name: "Heels & Sandals", emoji: "👠", valColor: "#EBF5FB" },
+              { name: "Flats", emoji: "🥿", valColor: "#FCF3CF" },
+              { name: "Boots", emoji: "👢", valColor: "#FBE5E5" },
+              { name: "Flipflops & Slippers", emoji: "🩴", valColor: "#E6F9EC" },
+              { name: "Bellies & Ballerinas", emoji: "🥿", valColor: "#E8F0FE" }
+            ]
+          },
+          {
+            title: "Men Footwear",
+            items: [
+              { name: "View All", emoji: "👞", valColor: "#EAECEE" },
+              { name: "Men Casual Shoes", emoji: "👟", valColor: "#E8F8F5" },
+              { name: "Men Sports Shoes", emoji: "👟", valColor: "#E6F9EC" },
+              { name: "Men Flip Flops", emoji: "🩴", valColor: "#FFF3E0" },
+              { name: "Men Formal Shoes", emoji: "👞", valColor: "#FEF9E7" },
+              { name: "Loafers", emoji: "👞", valColor: "#F4ECF7" }
+            ]
+          },
+          {
+            title: "Kids Footwear",
+            items: [
+              { name: "View All", emoji: "👟", valColor: "#FFE5EC" },
+              { name: "Boys Shoes", emoji: "👟", valColor: "#E8F0FE" },
+              { name: "Girls Shoes", emoji: "🩰", valColor: "#FBE5E5" }
+            ]
+          }
+        ]
+      },
+      {
+        id: "electronics",
+        name: "Electronics",
+        emoji: "⌚",
+        bgColor: "#EAECEE",
+        sections: [
+          {
+            title: "Audio & Mobiles",
+            items: [
+              { name: "Neckband", emoji: "🎧", valColor: "#E8F8F5" },
+              { name: "Speakers", emoji: "🔊", valColor: "#FFF3E0" },
+              { name: "Bluetooth Earbuds", emoji: "🎙️", valColor: "#FFE5EC" },
+              { name: "Wired Earphone", emoji: "🎧", valColor: "#E8F0FE" }
+            ]
+          },
+          {
+            title: "Accessories",
+            items: [
+              { name: "Mobile Holders", emoji: "📱", valColor: "#FEF9E7" },
+              { name: "Mobile Chargers", emoji: "🔌", valColor: "#E6F9EC" },
+              { name: "Power Banks", emoji: "🔋", valColor: "#F4ECF7" },
+              { name: "Microphone", emoji: "🎙️", valColor: "#FCF3CF" },
+              { name: "Selfie Ringlight", emoji: "🤳", valColor: "#FBE5E5" },
+              { name: "Tripod & Monopod", emoji: "🔭", valColor: "#EBF5FB" },
+              { name: "Extension Cord", emoji: "🔌", valColor: "#EAECEE" },
+              { name: "Screen Expanders", emoji: "🔍", valColor: "#EAFAF1" },
+              { name: "View All", emoji: "🌐", valColor: "#F5EEF8" }
+            ]
+          }
+        ]
+      },
+      {
+        id: "watches",
+        name: "Watches",
+        emoji: "🕐",
+        bgColor: "#FFF3E0",
+        sections: [
+          {
+            title: "watches",
+            items: [
+              { name: "Analog Watches", emoji: "⌚", valColor: "#EBF5FB" },
+              { name: "Digital Watches", emoji: "📟", valColor: "#F4ECF7" },
+              { name: "Sport Watches", emoji: "⏱️", valColor: "#E6F9EC" },
+              { name: "Couple Watch", emoji: "👩‍❤️‍👨", valColor: "#FFE5EC" },
+              { name: "Bands & Boxes", emoji: "📦", valColor: "#FEF9E7" },
+              { name: "View All", emoji: "⌚", valColor: "#FCF3CF" }
+            ]
+          }
+        ]
+      },
+      {
+        id: "sports_fitness",
+        name: "Sports & Fitness",
+        emoji: "🏋️",
+        bgColor: "#E8F8F5",
+        sections: [
+          {
+            title: "Fitness",
+            items: [
+              { name: "View All", emoji: "🏋️", valColor: "#E8F8F5" },
+              { name: "Sweat Belts", emoji: "🎗️", valColor: "#FBE5E5" },
+              { name: "Exercise Bands", emoji: "🎗️", valColor: "#E8F0FE" },
+              { name: "Tummy Trimmers", emoji: "🧘", valColor: "#FCF3CF" },
+              { name: "Skipping Ropes", emoji: "🪢", valColor: "#FFE5EC" },
+              { name: "Hand Gripper", emoji: "✊", valColor: "#EAECEE" },
+              { name: "Yoga", emoji: "🧘", valColor: "#E6F9EC" },
+              { name: "Fitness Accessories", emoji: "🕶️", valColor: "#FFF3E0" },
+              { name: "Fitness Gears", emoji: "🏋️", valColor: "#F4ECF7" }
+            ]
+          },
+          {
+            title: "Sports",
+            items: [
+              { name: "Cricket", emoji: "🏏", valColor: "#FEF9E7" },
+              { name: "Cycles & Acc.", emoji: "🚲", valColor: "#EBF5FB" },
+              { name: "Skating", emoji: "🛼", valColor: "#F5EEF8" },
+              { name: "Football", emoji: "⚽", valColor: "#E6F9EC" },
+              { name: "Badminton", emoji: "🏸", valColor: "#FFE5EC" },
+              { name: "Volleyball", emoji: "🏐", valColor: "#E8F8F5" }
+            ]
+          }
+        ]
+      },
+      {
+        id: "car_motorbike",
+        name: "Car & Motorbike",
+        emoji: "🏍️",
+        bgColor: "#EBF5FB",
+        sections: [
+          {
+            title: "Bike & Scooty Accessories",
+            items: [
+              { name: "Bike LED Lights", emoji: "💡", valColor: "#FCF3CF" },
+              { name: "Bike Covers", emoji: "🛵", valColor: "#FFE5EC" },
+              { name: "Bike Accessories", emoji: "🏍️", valColor: "#EBF5FB" },
+              { name: "Safety Gear", emoji: "🧥", valColor: "#EAECEE" },
+              { name: "Helmets", emoji: "🪖", valColor: "#FBE5E5" },
+              { name: "Scooty Acc.", emoji: "🛵", valColor: "#E6F9EC" }
+            ]
+          },
+          {
+            title: "Car Accessories",
+            items: [
+              { name: "Interior Acc.", emoji: "🚗", valColor: "#E8F0FE" },
+              { name: "Car Cleaning", emoji: "🧼", valColor: "#E8F8F5" },
+              { name: "Car Repair", emoji: "🔧", valColor: "#FFF3E0" },
+              { name: "Car Mobile Holder", emoji: "📱", valColor: "#F4ECF7" },
+              { name: "Car Covers", emoji: "🚗", valColor: "#FEF9E7" },
+              { name: "Exterior Acc.", emoji: "🏎️", valColor: "#EAFAF1" }
+            ]
+          }
+        ]
+      },
+      {
+        id: "office_supplies",
+        name: "Office Supplies &...",
+        emoji: "📎",
+        bgColor: "#F4ECF7",
+        sections: [
+          {
+            title: "Office Supplies & Stationery",
+            items: [
+              { name: "View All", emoji: "📎", valColor: "#F5EEF8" },
+              { name: "Pens & Pencils", emoji: "✏️", valColor: "#E8F0FE" },
+              { name: "Diaries & Books", emoji: "📔", valColor: "#FEF9E7" },
+              { name: "Art & Craft", emoji: "🎨", valColor: "#FFE5EC" },
+              { name: "Files & Desk Org", emoji: "📁", valColor: "#E6F9EC" },
+              { name: "Adhesives & Tapes", emoji: "🩹", valColor: "#EAECEE" }
+            ]
+          }
+        ]
+      },
+      {
+        id: "grocery",
+        name: "Grocery",
+        emoji: "🛒",
+        bgColor: "#E8F8F5",
+        sections: [
+          {
+            title: "Food & Drinks",
+            items: [
+              { name: "Dry Fruits", emoji: "🥜", valColor: "#FEF9E7" },
+              { name: "Masala & Spices", emoji: "🌶️", valColor: "#FBE5E5" },
+              { name: "Snacks", emoji: "🍿", valColor: "#FCF3CF" },
+              { name: "Pickles", emoji: "🏺", valColor: "#FFF3E0" },
+              { name: "Chocolates", emoji: "🍫", valColor: "#FFE5EC" },
+              { name: "Biscuits", emoji: "🍪", valColor: "#E8F0FE" },
+              { name: "Coffee", emoji: "☕", valColor: "#EAECEE" },
+              { name: "Tea", emoji: "🍵", valColor: "#E6F9EC" },
+              { name: "View All", emoji: "🛒", valColor: "#E8F8F5" }
+            ]
+          }
+        ]
+      },
+      {
+        id: "books",
+        name: "Books",
+        emoji: "📚",
+        bgColor: "#FEF9E7",
+        sections: [
+          {
+            title: "Fiction & Non Fiction",
+            items: [
+              { name: "Children's Books", emoji: "📖", valColor: "#E8F0FE" },
+              { name: "Motivational Books", emoji: "📚", valColor: "#FFE5EC" },
+              { name: "Novels", emoji: "📕", valColor: "#FBE5E5" },
+              { name: "Religious Books", emoji: "🛐", valColor: "#FCF3CF" },
+              { name: "Economics", emoji: "📊", valColor: "#E8F8F5" },
+              { name: "View All Books", emoji: "📚", valColor: "#EBF5FB" }
+            ]
+          },
+          {
+            title: "Academic Books",
+            items: [
+              { name: "UPSC Exams", emoji: "🏛️", valColor: "#EAECEE" },
+              { name: "Competitive Prep", emoji: "📝", valColor: "#F4ECF7" },
+              { name: "Reference Books", emoji: "📘", valColor: "#FEF9E7" },
+              { name: "School Textbooks", emoji: "🏫", valColor: "#E6F9EC" },
+              { name: "University Books", emoji: "🎓", valColor: "#EAFAF1" },
+              { name: "All Academic", emoji: "📚", valColor: "#FFF3E0" }
+            ]
+          }
+        ]
+      },
+      {
+        id: "pet_supplies",
+        name: "Pet Supplies",
+        emoji: "🐾",
+        bgColor: "#FDF2E9",
+        sections: [
+          {
+            title: "Pet Supplies",
+            items: [
+              { name: "Collars & Leashes", emoji: "🎗️", valColor: "#FFE5EC" },
+              { name: "Clothes & Grooming", emoji: "✂️", valColor: "#EBF5FB" },
+              { name: "Food & Treats", emoji: "🥩", valColor: "#FCF3CF" },
+              { name: "Aquarium Acc.", emoji: "🐠", valColor: "#E8F8F5" },
+              { name: "Pet Toys", emoji: "🧸", valColor: "#F4ECF7" },
+              { name: "Pet Bowls", emoji: "🥣", valColor: "#E6F9EC" }
+            ]
+          }
+        ]
+      },
+      {
+        id: "musical_instruments",
+        name: "Musical Instruments",
+        emoji: "🎸",
+        bgColor: "#FBEEE6",
+        sections: [
+          {
+            title: "Musical Instruments",
+            items: [
+              { name: "Dholaks & Drums", emoji: "🥁", valColor: "#FEF9E7" },
+              { name: "Piano & Keyboard", emoji: "🎹", valColor: "#E8F0FE" },
+              { name: "String Instruments", emoji: "🎸", valColor: "#FFE5EC" },
+              { name: "Wind Instruments", emoji: "🎺", valColor: "#E6F9EC" },
+              { name: "Musical Acc.", emoji: "🎼", valColor: "#F5EEF8" },
+              { name: "All Instruments", emoji: "🎻", valColor: "#FBE5E5" }
+            ]
+          }
+        ]
+      }
+    ];
+
+    // ─── DOM INJECTION & SETUP ───
+    const leftSidebar = document.getElementById('left-sidebar');
+    const rightPanel = document.getElementById('right-panel');
+    const toast = document.getElementById('app-toast');
+
+    let isManualScrolling = false;
+    let scrollTimeout = null;
+
+    // Render Left Sidebar Items
+    const categoryIcons = {
+      popular: "https://cdn-icons-png.flaticon.com/512/1828/1828884.png",
+      kurti_saree_lehenga: "https://cdn-icons-png.flaticon.com/512/3004/3004128.png",
+      women_western: "https://cdn-icons-png.flaticon.com/512/3116/3116209.png",
+      lingerie: "https://cdn-icons-png.flaticon.com/512/3400/3400277.png",
+      men: "https://cdn-icons-png.flaticon.com/512/3531/3531777.png",
+      kids_toys: "https://cdn-icons-png.flaticon.com/512/3082/3082060.png",
+      home_kitchen: "https://cdn-icons-png.flaticon.com/512/619/619032.png",
+      beauty_health: "https://cdn-icons-png.flaticon.com/512/2822/2822361.png",
+      jewellery_accessories: "https://cdn-icons-png.flaticon.com/512/3024/3024621.png",
+      bags_footwear: "https://cdn-icons-png.flaticon.com/512/2950/2950669.png",
+      electronics: "https://cdn-icons-png.flaticon.com/512/900/900618.png",
+      watches: "https://cdn-icons-png.flaticon.com/512/2953/2953536.png",
+      sports_fitness: "https://cdn-icons-png.flaticon.com/512/2942/2942789.png",
+      car_motorbike: "https://cdn-icons-png.flaticon.com/512/743/743722.png",
+      office_supplies: "https://cdn-icons-png.flaticon.com/512/1001/1001371.png",
+      grocery: "https://cdn-icons-png.flaticon.com/512/3724/3724720.png",
+      books: "https://cdn-icons-png.flaticon.com/512/2232/2232688.png",
+      pet_supplies: "https://cdn-icons-png.flaticon.com/512/616/616408.png",
+      musical_instruments: "https://cdn-icons-png.flaticon.com/512/3295/3295240.png"
+    };
+
+    categories.forEach((cat, idx) => {
+      const sidebarItem = document.createElement('a');
+      sidebarItem.className = `sidebar-item ${idx === 0 ? 'active' : ''}`;
+      sidebarItem.id = `sidebar-${cat.id}`;
+      sidebarItem.href = `#section-${cat.id}`;
+      
+      // Keep click handler but prevent default to scroll smooth
+      sidebarItem.addEventListener('click', (e) => {
+        e.preventDefault();
+        setActiveSidebarItem(cat.id, true);
+      });
+
+      const iconUrl = categoryIcons[cat.id];
+      const iconContent = iconUrl 
+        ? `<img src="${iconUrl}" style="width: 28px; height: 28px; object-fit: contain;" />`
+        : cat.emoji;
+
+      sidebarItem.innerHTML = `
+        <div class="sidebar-icon-circle" style="background-color: ${cat.bgColor || '#ffffff'}">
+          ${iconContent}
+        </div>
+        <div class="sidebar-label">${cat.name}</div>
+      `;
+      leftSidebar.appendChild(sidebarItem);
+    });
+
+    // Render Right Panel Sections
+    categories.forEach((cat, idx) => {
+      const section = document.createElement('div');
+      section.className = 'category-section';
+      section.id = `section-${cat.id}`;
+      
+      let sectionsHTML = '';
+      cat.sections.forEach(sec => {
+        sectionsHTML += `
+          <div class="subsection-title">${sec.title}</div>
+          <div class="product-grid">
+        `;
+        sec.items.forEach(item => {
+          sectionsHTML += `
+            <div class="product-item" onclick="showToast('Browsing: ${item.name}')">
+              <div class="product-image-container" style="background: radial-gradient(circle, #ffffff 0%, ${item.valColor || '#f0f0f0'} 100%)">
+                ${item.emoji}
+              </div>
+              <div class="product-label">${item.name}</div>
+            </div>
+          `;
+        });
+        sectionsHTML += `</div>`;
+      });
+
+      section.innerHTML = `
+        <div class="section-breadcrumb">
+          <span>🏠</span> ${cat.name}
+        </div>
+        <div class="section-divider"></div>
+        ${sectionsHTML}
+      `;
+      rightPanel.appendChild(section);
+    });
+
+    // ─── SYNC SCROLL & LOGIC ───
+
+    // Set Active State and Handle Sidebar Positioning
+    function setActiveSidebarItem(catId, scrollRight = true) {
+      // Deactivate all sidebar items
+      document.querySelectorAll('.sidebar-item').forEach(item => {
+        item.classList.remove('active');
+      });
+
+      // Activate current
+      const activeItem = document.getElementById(`sidebar-${catId}`);
+      if (activeItem) {
+        activeItem.classList.add('active');
+        
+        // Auto-center the selected sidebar item in viewport
+        leftSidebar.scrollTo({
+          top: activeItem.offsetTop - leftSidebar.clientHeight / 2 + activeItem.clientHeight / 2,
+          behavior: 'smooth'
+        });
+      }
+
+      // If clicked sidebar, scroll right panel to item
+      if (scrollRight) {
+        const section = document.getElementById(`section-${catId}`);
+        if (section) {
+          isManualScrolling = true;
+          rightPanel.scrollTo({
+            top: section.offsetTop - 5,
+            behavior: 'smooth'
+          });
+
+          if (scrollTimeout) clearTimeout(scrollTimeout);
+          scrollTimeout = setTimeout(() => {
+            isManualScrolling = false;
+          }, 800);
+        }
+      }
+    }
+
+    // Scroll spy on right panel
+    rightPanel.addEventListener('scroll', () => {
+      if (isManualScrolling) return;
+
+      const y = rightPanel.scrollTop;
+      const bottomReached = (rightPanel.scrollHeight - rightPanel.scrollTop - rightPanel.clientHeight) < 60;
+
+      let activeId = categories[0].id;
+
+      if (bottomReached) {
+        activeId = categories[categories.length - 1].id;
+      } else {
+        let maxOffset = -1;
+        categories.forEach(cat => {
+          const section = document.getElementById(`section-${cat.id}`);
+          if (section) {
+            const offset = section.offsetTop;
+            // 80px offset threshold for natural visual timing before headers hit the top
+            if (y >= offset - 80) {
+              if (offset > maxOffset) {
+                maxOffset = offset;
+                activeId = cat.id;
+              }
+            }
+          }
+        });
+      }
+
+      setActiveSidebarItem(activeId, false);
+    });
+
+    // Toast Alert Helper
+    let toastTimeout = null;
+    function showToast(text) {
+      toast.innerText = text;
+      toast.classList.add('show');
+      
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove('show');
+      }, 1500);
+    }
+  </script>
+</body>
+</html>
