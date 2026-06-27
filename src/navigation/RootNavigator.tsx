@@ -18,12 +18,14 @@ import OrdersScreen from '../screens/OrdersScreen';
 import ShopDetailScreen from '../screens/ShopDetailScreen';
 import HelpSupportScreen from '../screens/HelpSupportScreen';
 import AboutUsScreen from '../screens/AboutUsScreen';
+import CategoryProductsScreen from '../screens/CategoryProductsScreen';
 
 import SearchScreen from '../screens/SearchScreen';
 import WishlistScreen from '../screens/WishlistScreen';
 import SavedShopsScreen from '../screens/SavedShopsScreen';
 import AddressesScreen from '../screens/AddressesScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
+import WelcomeScreen from '../screens/WelcomeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
 
@@ -94,6 +96,7 @@ export default function RootNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!isAuthenticated ? (
         <>
+          <Stack.Screen name="Welcome" component={WelcomeScreen} />
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="Signup" component={SignupScreen} />
         </>
@@ -101,6 +104,7 @@ export default function RootNavigator() {
         <>
           <Stack.Screen name="MainTabs" component={TabNavigator} />
           <Stack.Screen name="Search" component={SearchScreen} />
+          <Stack.Screen name="CategoryProducts" component={CategoryProductsScreen} />
           <Stack.Screen name="Wishlist" component={WishlistScreen} />
           <Stack.Screen name="SavedShops" component={SavedShopsScreen} />
           <Stack.Screen name="Addresses" component={AddressesScreen} />

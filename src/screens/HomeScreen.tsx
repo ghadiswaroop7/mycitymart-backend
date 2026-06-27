@@ -13,6 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 import { addToCart } from '../store/slices/cartSlice';
 import { RootState } from '../store';
+import { CATEGORIES } from '../config/categories';
 
 import HomeTabBar from '../components/HomeTabBar';
 import ProductCard from '../components/ProductCard';
@@ -479,12 +480,14 @@ const styles_banner = StyleSheet.create({
 const TrustBadges = () => (
   <View className="flex-row justify-between bg-zinc-50 px-5 py-4 border-t border-b border-zinc-100 mb-6 mt-2">
     {[
-      { icon: '<HugeIcon icon={TruckIcon} size={16} />', title: 'Free Delivery', sub: 'First 3 orders' },
-      { icon: '⚡', title: 'Flash Deals', sub: 'Up to 60% off' },
-      { icon: '🛡️', title: 'Authentic', sub: 'Verified shops' },
+      { icon: <HugeIcon icon={TruckIcon} size={24} color="#008B45" />, title: 'Free Delivery', sub: 'First 3 orders' },
+      { icon: <Text style={{ fontSize: 24 }}>⚡</Text>, title: 'Flash Deals', sub: 'Up to 60% off' },
+      { icon: <Text style={{ fontSize: 24 }}>🛡️</Text>, title: 'Authentic', sub: 'Verified shops' },
     ].map(badge => (
       <View key={badge.title} className="items-center flex-1">
-        <Text className="text-2xl mb-1">{badge.icon}</Text>
+        <View style={{ height: 32, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
+          {badge.icon}
+        </View>
         <Text className="text-[11px] font-bold text-[#1C1C1C] text-center">{badge.title}</Text>
         <Text className="text-[9px] text-zinc-500 text-center">{badge.sub}</Text>
       </View>
@@ -666,6 +669,7 @@ const FlashDealSection = ({ deals, products }: { deals: any[], products: any[] }
 };
 
 export default function HomeScreen() {
+  const navigation = useNavigation<any>();
   const scrollY = useRef(new Animated.Value(0)).current;
   const [activeTab, setActiveTab] = useState('ALL');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -922,11 +926,11 @@ export default function HomeScreen() {
 
   const getHomepageSections = () => {
     const defaultSections = [
-      { id: 'banners', name: 'Hero Banner', enabled: true },
-      { id: 'trust_badges', name: 'Trust Strip', enabled: true },
-      { id: 'flash_deals', name: 'Flash Deals', enabled: true },
-      { id: 'storefront_layouts', name: 'Featured Products', enabled: true },
-      { id: 'all_products', name: 'All Products', enabled: true }
+      { id: 'banners', key: 'banners', name: 'Hero Banner', enabled: true },
+      { id: 'trust_badges', key: 'trust_badges', name: 'Trust Strip', enabled: true },
+      { id: 'flash_deals', key: 'flash_deals', name: 'Flash Deals', enabled: true },
+      { id: 'storefront_layouts', key: 'storefront_layouts', name: 'Featured Products', enabled: true },
+      { id: 'all_products', key: 'all_products', name: 'All Products', enabled: true }
     ];
 
     if (!layoutSettings?.homepageSections) {
@@ -1257,32 +1261,22 @@ export default function HomeScreen() {
           {/* Spacer to align content below expanded header */}
           <View style={{ height: promoOffers.length > 0 ? 130 : 0 }} />
           {/* ── CATEGORY ICONS ── */}
-          <View className="bg-white pt-4 px-5">
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {dynamicCategories.map(cat => (
+          <View className="bg-white">
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: 16, marginTop: 16, paddingBottom: 8 }}>
+              {CATEGORIES.map((cat, idx) => (
                 <TouchableOpacity
                   key={cat.id}
-                  onPress={() => setSelectedCategory(cat.id)}
-                  activeOpacity={0.7}
-                  style={{ alignItems: 'center', marginRight: 16 }}
+                  onPress={() => navigation.navigate('CategoryProducts', { categoryId: cat.id, categoryName: cat.label })}
+                  style={{ alignItems: 'center', marginRight: 16, width: 70 }}
                 >
                   <View style={{
-                    width: 60, height: 60,
-                    borderRadius: 30,
-                    backgroundColor: cat.color,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    borderWidth: selectedCategory === cat.id ? 2 : 0,
-                    borderColor: '#008B45'
+                    width: 60, height: 60, borderRadius: 30, backgroundColor: cat.color,
+                    justifyContent: 'center', alignItems: 'center', marginBottom: 8,
+                    borderWidth: 1, borderColor: '#F0F0F0'
                   }}>
-                    <Text style={{ fontSize: 28 }}>{cat.icon}</Text>
+                    <Image source={cat.image} style={{ width: 45, height: 45, borderRadius: 22 }} resizeMode="cover" />
                   </View>
-                  <Text style={{
-                    fontSize: 11,
-                    marginTop: 6,
-                    color: selectedCategory === cat.id ? '#008B45' : '#1A1A1A',
-                    fontFamily: selectedCategory === cat.id ? 'Poppins_600SemiBold' : 'Poppins_400Regular'
-                  }}>
+                  <Text style={{ fontSize: 11, fontFamily: 'Poppins-Medium', color: '#333', textAlign: 'center' }} numberOfLines={2}>
                     {cat.label}
                   </Text>
                 </TouchableOpacity>

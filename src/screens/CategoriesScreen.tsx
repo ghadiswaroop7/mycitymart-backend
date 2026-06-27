@@ -1,33 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Platform, StatusBar, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Platform, StatusBar, Image, TextInput, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { useSelector } from 'react-redux';
-import { RootState } from '../store';
 import { HugeIcon } from '../components/HugeIcon';
 import * as Hugeicons from '@hugeicons/core-free-icons';
-
-const CATEGORY_ICONS_MAPPING: Record<string, any> = {
-  popular: require('../../assets/cat_popular.png'),
-  kurti_saree_lehenga: require('../../assets/cat_kurti_saree_lehenga.png'),
-  women_western: require('../../assets/cat_women_western.png'),
-  lingerie: require('../../assets/cat_lingerie.png'),
-  men: require('../../assets/cat_men.png'),
-  kids_toys: require('../../assets/cat_kids_toys.png'),
-  home_kitchen: require('../../assets/cat_home_kitchen.png'),
-  beauty_health: require('../../assets/cat_beauty_health.png'),
-  jewellery_accessories: require('../../assets/cat_jewellery_accessories.png'),
-  bags_footwear: require('../../assets/cat_bags_footwear.png'),
-  electronics: require('../../assets/cat_electronics.png'),
-  watches: require('../../assets/cat_watches.png'),
-  sports_fitness: require('../../assets/cat_sports_fitness.png'),
-  car_motorbike: require('../../assets/cat_car_motorbike.png'),
-  office_supplies: require('../../assets/cat_office_supplies.png'),
-  grocery: require('../../assets/cat_grocery.png'),
-  books: require('../../assets/cat_books.png'),
-  pet_supplies: require('../../assets/cat_pet_supplies.png'),
-  musical_instruments: require('../../assets/cat_musical_instruments.png'),
-};
+import { CATEGORIES } from '../config/categories';
+import { COLORS } from '../styles/theme';
 
 const CATEGORIES_DATA = [
   {
@@ -661,254 +639,180 @@ const CATEGORIES_DATA = [
   }
 ];
 
+
 export default function CategoriesScreen() {
   const navigation = useNavigation<any>();
-  const [activeCategoryId, setActiveCategoryId] = useState(CATEGORIES_DATA[0].id);
-  const totalItems = useSelector((state: RootState) => state.cart.count);
+  const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[0].id);
+  const scrollViewRef = useRef<ScrollView>(null);
+  
+  // Animation value
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  const leftScrollRef = useRef<ScrollView>(null);
-  const rightScrollRef = useRef<ScrollView>(null);
-  const isManualScrolling = useRef(false);
-  const offsetsRef = useRef<Record<string, number>>({});
-  const timeoutRef = useRef<any>(null);
-
+  // Animate on category change
   useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
+    fadeAnim.setValue(0);
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [selectedCategory]);
 
-  const handleSidebarPress = (catId: string, index: number) => {
-    setActiveCategoryId(catId);
-    isManualScrolling.current = true;
-
-    const targetY = offsetsRef.current[catId];
-    if (typeof targetY === 'number') {
-      rightScrollRef.current?.scrollTo({ y: targetY - 10, animated: true });
-    }
-
-    leftScrollRef.current?.scrollTo({
-      y: index * 85 - 250,
-      animated: true
-    });
-
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-    timeoutRef.current = setTimeout(() => {
-      isManualScrolling.current = false;
-    }, 1000);
+  // Auto-scroll to top when category changes
+  const handleCategorySelect = (id: string) => {
+    setSelectedCategory(id);
+    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
   };
 
-  const onRightScroll = (event: any) => {
-    if (isManualScrolling.current) return;
-    const y = event.nativeEvent.contentOffset.y;
-    const { layoutMeasurement, contentSize } = event.nativeEvent;
-
-    // Detect if scroll position is very close to bottom to activate last category
-    const isCloseToBottom = layoutMeasurement.height + y >= contentSize.height - 80;
-
-    let currentCatId = activeCategoryId;
-
-    if (isCloseToBottom) {
-      currentCatId = CATEGORIES_DATA[CATEGORIES_DATA.length - 1].id;
-    } else {
-      let maxMatchedOffset = -1;
-      for (let i = 0; i < CATEGORIES_DATA.length; i++) {
-        const cat = CATEGORIES_DATA[i];
-        const catOffset = offsetsRef.current[cat.id];
-        // 100px threshold allows smoother transition before headers fully reach the top border
-        if (catOffset !== undefined && y >= catOffset - 100) {
-          if (catOffset > maxMatchedOffset) {
-            maxMatchedOffset = catOffset;
-            currentCatId = cat.id;
-          }
-        }
-      }
-    }
-
-    if (currentCatId !== activeCategoryId) {
-      setActiveCategoryId(currentCatId);
-
-      const catIndex = CATEGORIES_DATA.findIndex(c => c.id === currentCatId);
-      if (catIndex !== -1) {
-        leftScrollRef.current?.scrollTo({
-          y: catIndex * 85 - 250,
-          animated: true
-        });
-      }
-    }
+  // Map to find subcategories (mapping user's new IDs to old CATEGORIES_DATA IDs where they differ)
+  const idMapping: Record<string, string> = {
+    'kurti_saree': 'kurti_saree_lehenga',
+    'women_western': 'women_western',
+    'lingerie': 'lingerie',
+    'men': 'men',
+    'kids_toys': 'kids_toys',
+    'home_kitchen': 'home_kitchen',
+    'beauty': 'beauty_health',
+    'electronics': 'electronics',
+    'grocery': 'grocery',
+    'bags': 'bags_footwear',
+    'jewellery': 'jewellery_accessories',
+    'sports': 'sports_fitness',
+    'books': 'books',
+    'pets': 'pet_supplies',
+    'watches': 'watches'
   };
+
+  const activeData = CATEGORIES_DATA.find(d => d.id === (idMapping[selectedCategory] || selectedCategory));
+  const activeCategory = CATEGORIES.find(c => c.id === selectedCategory);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF', paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0, width: '100%', alignItems: 'stretch' }}>
-      {/* ─── HEADER ─── */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#EEEEEE', backgroundColor: '#FFFFFF', width: '100%', height: 48 }}>
-        <Text style={{ fontSize: 15, fontWeight: '700', color: '#111111', letterSpacing: 0.5 }}>CATEGORIES</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <TouchableOpacity style={{ padding: 4 }} onPress={() => navigation.navigate('Search')}>
-            <HugeIcon icon={Hugeicons.Search02Icon} size={20} color="#111111" />
-          </TouchableOpacity>
-          <TouchableOpacity style={{ padding: 4, marginLeft: 12 }} onPress={() => navigation.navigate('Wishlist')}>
-            <HugeIcon icon={Hugeicons.FavouriteIcon} size={20} color="#111111" />
-          </TouchableOpacity>
-          <TouchableOpacity style={{ padding: 4, marginLeft: 12, position: 'relative' }} onPress={() => navigation.navigate('Cart')}>
-            <HugeIcon icon={Hugeicons.ShoppingCart01Icon} size={20} color="#111111" />
-            {totalItems > 0 ? (
-              <View style={{ position: 'absolute', top: -2, right: -2, backgroundColor: '#8B2FC9', borderRadius: 7, width: 14, height: 14, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ color: '#FFFFFF', fontSize: 8, fontWeight: '800' }}>{totalItems > 99 ? '99+' : totalItems}</Text>
-              </View>
-            ) : null}
-          </TouchableOpacity>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }} edges={['top']}>
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+      
+      {/* Header & Search */}
+      <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' }}>
+        <Text style={{ fontSize: 20, fontFamily: 'Poppins-SemiBold', color: '#1A1A1A', marginBottom: 12 }}>Categories</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F5F5', borderRadius: 8, paddingHorizontal: 12, height: 44 }}>
+          <HugeIcon icon={Hugeicons.Search01Icon} size={20} color="#666" />
+          <TextInput 
+            placeholder="Search categories..."
+            style={{ flex: 1, marginLeft: 8, fontSize: 14, fontFamily: 'Poppins-Regular', color: '#333' }}
+            placeholderTextColor="#999"
+          />
         </View>
       </View>
 
-      {/* ─── MAIN TWO-PANEL LAYOUT ─── */}
-      <View style={{ flex: 1, flexDirection: 'row', width: '100%', alignItems: 'stretch', justifyContent: 'flex-start', overflow: 'hidden' }}>
-        {/* LEFT SIDEBAR (fixed 90 width, scrolls independently) */}
-        <ScrollView 
-          ref={leftScrollRef}
-          style={{ width: 90, minWidth: 90, maxWidth: 90, backgroundColor: '#F0F0F0', flexGrow: 0 }} 
-          showsVerticalScrollIndicator={false} 
-          contentContainerStyle={{ paddingBottom: 20 }}
-        >
-          {CATEGORIES_DATA.map((cat, catIdx) => {
-            const isActive = cat.id === activeCategoryId;
-            return (
-              <TouchableOpacity
-                key={cat.id}
-                onPress={() => handleSidebarPress(cat.id, catIdx)}
-                style={{
-                  width: '100%',
-                  paddingVertical: 10,
-                  paddingHorizontal: 4,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: isActive ? '#FFFFFF' : '#F0F0F0',
-                  borderLeftWidth: 3,
-                  borderLeftColor: isActive ? '#8B2FC9' : 'transparent',
-                  borderBottomWidth: 1,
-                  borderBottomColor: '#E8E8E8'
-                }}
-              >
-                <View style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
-                  backgroundColor: cat.iconBg,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: 4,
-                  borderWidth: 2,
-                  borderColor: isActive ? 'rgba(139, 47, 201, 0.3)' : 'transparent',
-                  shadowColor: '#000000',
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.05,
-                  shadowRadius: 2,
-                  elevation: 1
-                }}>
-                  <Image 
-                    source={CATEGORY_ICONS_MAPPING[cat.id]} 
-                    style={{ width: 28, height: 28 }} 
-                    resizeMode="contain" 
-                  />
-                </View>
-                <Text
+      <View style={{ flex: 1, flexDirection: 'row' }}>
+        {/* Left Sidebar */}
+        <View style={{ width: 90, backgroundColor: '#F8F9FA', borderRightWidth: 1, borderRightColor: '#F0F0F0' }}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 8 }}>
+            {CATEGORIES.map((cat) => {
+              const isActive = selectedCategory === cat.id;
+              return (
+                <TouchableOpacity
+                  key={cat.id}
+                  onPress={() => handleCategorySelect(cat.id)}
                   style={{
-                    fontSize: 10,
-                    textAlign: 'center',
-                    lineHeight: 12,
-                    color: isActive ? '#8B2FC9' : '#444444',
-                    fontWeight: isActive ? '600' : '400',
-                    width: '100%'
+                    alignItems: 'center',
+                    paddingVertical: 12,
+                    paddingHorizontal: 4,
+                    backgroundColor: isActive ? '#fff' : 'transparent',
+                    borderLeftWidth: 3,
+                    borderLeftColor: isActive ? COLORS.primaryGreen : 'transparent',
                   }}
-                  numberOfLines={2}
                 >
-                  {cat.name}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        {/* RIGHT CONTENT PANEL (flex: 1, scrolls independently) */}
-        <ScrollView 
-          ref={rightScrollRef}
-          style={{ flex: 1, backgroundColor: '#FFFFFF', paddingHorizontal: 10 }} 
-          showsVerticalScrollIndicator={false} 
-          contentContainerStyle={{ paddingBottom: 100 }}
-          onScroll={onRightScroll}
-          scrollEventThrottle={16}
-          onMomentumScrollEnd={() => {
-            isManualScrolling.current = false;
-          }}
-        >
-          {CATEGORIES_DATA.map((cat, catIdx) => (
-            <View 
-              key={cat.id}
-              onLayout={(e) => {
-                const { y } = e.nativeEvent.layout;
-                if (y > 0 || catIdx === 0) {
-                  offsetsRef.current[cat.id] = y;
-                }
-              }}
-              style={{ paddingBottom: 20 }}
-            >
-              {/* Category Breadcrumb */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: catIdx === 0 ? 15 : 30, marginBottom: 4 }}>
-                <Text style={{ fontSize: 10, color: '#999999', textTransform: 'uppercase', letterSpacing: 1 }}>
-                  🏠 {cat.name}
-                </Text>
-              </View>
-              <View style={{ borderBottomWidth: 1, borderBottomColor: '#DDDDDD', marginBottom: 12 }} />
-
-              {cat.sections.map((section, idx) => (
-                <View key={idx}>
-                  {/* Section Title */}
-                  <Text style={{ fontSize: 16, color: '#111111', fontWeight: '700', marginTop: 12, marginBottom: 10, textTransform: 'capitalize' }}>
-                    {section.sectionTitle}
-                  </Text>
-                  
-                  {/* Grid Layout (3 columns) */}
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', width: '100%' }}>
-                    {section.items.map((item, itemIdx) => (
-                      <TouchableOpacity
-                        key={itemIdx}
-                        onPress={() => navigation.navigate('Search', { initialQuery: item.name })}
-                        style={{ width: '33.33%', alignItems: 'center', marginBottom: 10 }}
-                      >
-                        <View style={{
-                          width: 70,
-                          height: 70,
-                          borderRadius: 35,
-                          backgroundColor: '#F0F0F0',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginBottom: 4,
-                          overflow: 'hidden'
-                        }}>
-                          <Image 
-                            source={{ uri: item.image }} 
-                            style={{ width: 70, height: 70, borderRadius: 35 }} 
-                            resizeMode="cover" 
-                          />
-                        </View>
-                        <Text 
-                          style={{ fontSize: 10, color: '#333333', textAlign: 'center', marginTop: 4, lineHeight: 13, maxWidth: 70 }} 
-                          numberOfLines={2}
-                        >
-                          {item.name}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+                  <View style={{
+                    width: 50,
+                    height: 50,
+                    borderRadius: 25,
+                    backgroundColor: isActive ? cat.color : '#fff',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginBottom: 4,
+                    borderWidth: 1,
+                    borderColor: isActive ? cat.color : '#E8E8E8',
+                    overflow: 'hidden'
+                  }}>
+                    <Image source={cat.image} style={{ width: 40, height: 40, borderRadius: 20 }} resizeMode="cover" />
                   </View>
-                </View>
-              ))}
+                  <Text style={{
+                    fontSize: 10,
+                    fontFamily: isActive ? 'Poppins-SemiBold' : 'Poppins-Regular',
+                    color: isActive ? COLORS.primaryGreen : '#666',
+                    textAlign: 'center',
+                  }}>
+                    {cat.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* Right Content */}
+        <Animated.ScrollView 
+          ref={scrollViewRef}
+          style={{ flex: 1, backgroundColor: '#fff', opacity: fadeAnim }} 
+          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled={true}
+        >
+          {activeData?.sections?.map((section: any, idx: number) => (
+            <View key={idx} style={{ marginBottom: 24 }}>
+              <Text style={{
+                fontSize: 16,
+                fontFamily: 'Poppins-SemiBold',
+                color: '#1A1A1A',
+                marginBottom: 16
+              }}>
+                {section.sectionTitle}
+              </Text>
+              
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -8 }}>
+                {section.items.map((item: any, itemIdx: number) => (
+                  <TouchableOpacity
+                    key={itemIdx}
+                    style={{ width: '33.33%', paddingHorizontal: 8, marginBottom: 16 }}
+                    onPress={() => navigation.navigate('CategoryProducts', { 
+                      categoryId: activeData?.id || selectedCategory, 
+                      categoryName: activeData?.name || ''
+                    })}
+                  >
+                    <View style={{
+                      aspectRatio: 1,
+                      backgroundColor: '#F8F9FA',
+                      borderRadius: 12,
+                      marginBottom: 8,
+                      overflow: 'hidden',
+                      borderWidth: 1,
+                      borderColor: '#F0F0F0'
+                    }}>
+                      <Image 
+                        source={activeCategory?.image} 
+                        style={{ width: '100%', height: '100%' }}
+                        resizeMode="cover"
+                      />
+                    </View>
+                    <Text style={{
+                      fontSize: 12,
+                      fontFamily: 'Poppins-Medium',
+                      color: '#333',
+                      textAlign: 'center'
+                    }} numberOfLines={2}>
+                      {item.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           ))}
-        </ScrollView>
+          {(!activeData || !activeData.sections || activeData.sections.length === 0) && (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 50 }}>
+              <Text style={{ fontFamily: 'Poppins-Regular', color: '#999' }}>No subcategories found</Text>
+            </View>
+          )}
+        </Animated.ScrollView>
       </View>
     </SafeAreaView>
   );
