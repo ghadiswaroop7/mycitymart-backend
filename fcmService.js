@@ -1,11 +1,8 @@
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
 import { getFirestore } from 'firebase-admin/firestore';
-import { readFileSync } from 'fs';
 
-const serviceAccount = JSON.parse(
-  readFileSync(new URL('./serviceAccount.json', import.meta.url))
-);
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
 if (!getApps().length) {
   initializeApp({
