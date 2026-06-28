@@ -11,10 +11,35 @@ dotenv.config();
 
 export const runIntakeAgent = async (messageText, senderPhone, hasImage) => {
   try {
-    const prompt = `You are the Intake Agent. A seller sent this message:
+    const prompt = `You are a friendly WhatsApp business assistant for MyCityMart marketplace. Local store sellers message you to list their products.
+
+CRITICAL RULES:
+1. Understand ANY natural language - Marathi, Hindi, English or mix
+2. Extract product details from casual messages - sellers will NOT use a fixed format
+3. If you can understand the product from context, proceed with listing
+4. Only ask for missing CRITICAL info (price OR product name) in a very casual friendly way
+5. NEVER send a rigid format template message
+6. Talk like a helpful friend, not a robot
+7. Match seller's language automatically
+
+Examples of messages you should understand:
+- "soap 50 ka hai 100 piece" → Product: Soap, Price: 50, Stock: 100
+- "bhai lipstick aahe 200 rs madhe" → Product: Lipstick, Price: 200
+- "cement 5 bag available 300 each" → Product: Cement, Price: 300, Stock: 5
+- "nava stock aala sarees 500 pcs 800 rupaye" → Saree, 800rs, 500 stock
+
+If price is missing, ask casually:
+Marathi: "अरे किंमत सांग ना! 😊"
+Hindi: "bhai kitne mein doge? 😊"  
+English: "Hey what's the price? 😊"
+
+If product name unclear, ask:
+Marathi: "कोणता product आहे? 😊"
+Hindi: "kaunsa product hai bhai? 😊"
+
+Seller Message:
 "${messageText}"
 
-Classify the message and extract details.
 Output ONLY a JSON object:
 {
   "message_type": "NEW_PRODUCT" | "QUERY" | "UNCLEAR",
@@ -24,7 +49,8 @@ Output ONLY a JSON object:
   "price": 0,
   "stock": 0,
   "description": "...",
-  "missing_fields": ["price", "stock", "image" (if has_image is false)]
+  "missing_fields": ["price", "product_name"],
+  "clarification_question": "..." (put the friendly question here if price or product_name is missing, else null)
 }`;
 
     const response = await axios.post(
@@ -85,9 +111,15 @@ export async function processIncomingMessage({ sender, text, imageMsg, sock }) {
     const hasImage = !!imageMsg;
     const parsedData = await runIntakeAgent(text, senderPhone, hasImage);
 
-    if (!parsedData || parsedData.message_type !== 'NEW_PRODUCT') {
-      // Not a product submission — send a helpful reply
-      const replyText = '👋 Namaste! Product add karaycha asel tar please ya format madhe pathva:\n\nProduct: [Name]\nPrice: [Price]\nStock: [Quantity]\n\nAni product cha photo pan pathva!';
+    if (!parsedData || parsedData.message_type !== 'NEW_PRODUCT' || !parsedData.product_name || !parsedData.price) {
+      // Missing critical info or unclear, send a friendly clarification question
+      let replyText = parsedData?.clarification_question;
+      if (!replyText) {
+         if (parsedData?.language_detected === 'marathi') replyText = '👋 नमस्ते! तुम्हाला प्रॉडक्ट ॲड करायचा आहे का? कृपया प्रॉडक्टचं नाव आणि किंमत सांगा. 😊';
+         else if (parsedData?.language_detected === 'hindi') replyText = '👋 नमस्ते! क्या आप प्रोडक्ट ऐड करना चाहते हैं? कृपया प्रोडक्ट का नाम और कीमत बताएं. 😊';
+         else replyText = '👋 Hello! Do you want to add a product? Please tell me the product name and price. 😊';
+      }
+      
       await sock.sendMessage(sender, { text: replyText });
       await db.collection('messages').add({
         sellerId: senderPhone,
@@ -139,37 +171,27 @@ export async function processIncomingMessage({ sender, text, imageMsg, sock }) {
     const currentSubmissions = sellerDoc.exists ? (sellerDoc.data().totalSubmissions || 0) : 0;
     await sellerRef.update({ totalSubmissions: currentSubmissions + 1 });
 
-    // 6. If REJECTED — send feedback to seller
-    if (validationResult.status === 'REJECTED') {
-      const feedback = await generateFeedbackMessage(
-        validationResult.missing_fields,
-        parsedData.language_detected || 'english',
-        'Missing required fields'
-      );
-      await sock.sendMessage(sender, { text: feedback });
-      await db.collection('messages').add({
-        sellerId: senderPhone,
-        direction: 'OUT',
-        text: feedback,
-        timestamp: new Date()
-      });
-    } else {
-      // 7. PENDING — notify admin via email + confirm to seller
-      await sendApprovalEmail([{
-        productName: parsedData.product_name,
-        price: parsedData.price,
-        qualityScore: validationResult.score
-      }]);
+    // 6. We have Name + Price -> Automatically proceed to PENDING without rigid loops
+    await sendApprovalEmail([{
+      productName: parsedData.product_name,
+      price: parsedData.price,
+      qualityScore: validationResult.score
+    }]);
 
-      const successMsg = `✅ Dhanyavaad! Tumcha product "${parsedData.product_name}" successfully submit zala aahe!\n\n📋 AI Score: ${validationResult.score}/100\n⏳ Status: Admin approval pending\n\nTumhala notification milel jeva approve hoil!`;
-      await sock.sendMessage(sender, { text: successMsg });
-      await db.collection('messages').add({
-        sellerId: senderPhone,
-        direction: 'OUT',
-        text: successMsg,
-        timestamp: new Date()
-      });
+    let successMsg = `✅ ${parsedData.product_name} listing ready! Admin review karun approve karil, mg tumhala kalvto 🙏`;
+    if (parsedData.language_detected === 'hindi') {
+      successMsg = `✅ ${parsedData.product_name} listing taiyar! Admin approve karega toh batayenge 🙏`;
+    } else if (parsedData.language_detected === 'english') {
+      successMsg = `✅ ${parsedData.product_name} listing is ready! We will let you know once the admin approves it 🙏`;
     }
+
+    await sock.sendMessage(sender, { text: successMsg });
+    await db.collection('messages').add({
+      sellerId: senderPhone,
+      direction: 'OUT',
+      text: successMsg,
+      timestamp: new Date()
+    });
 
   } catch (err) {
     console.error('❌ processIncomingMessage error:', err);
