@@ -43,7 +43,15 @@
           "backgroundColor": "#1E8A3C"
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraProguardRules": "./proguard-rules.pro"
+          }
+        }
+      ]
     ]
   }
 }
