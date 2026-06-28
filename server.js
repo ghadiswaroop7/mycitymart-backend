@@ -6,6 +6,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { db } from './fcmService.js';
 import { connectWhatsApp, getQRCode, getStatus, sendMessage } from './whatsappConnection.js';
+import { processIncomingMessage } from './agents/intakeAgent.js';
 
 dotenv.config();
 
@@ -48,9 +49,38 @@ app.use('/api', transactionRoutes);
 
 startNotificationWorker();
 
-// Start WhatsApp
-connectWhatsApp((msg, sock) => {
-  console.log('📨 New message from:', msg.key.remoteJid);
+// Start WhatsApp with AI Agent pipeline
+connectWhatsApp(async (msg, sock) => {
+  try {
+    const sender = msg.key.remoteJid;
+    if (!sender || sender === 'status@broadcast') return;
+
+    const messageText = msg.message?.conversation ||
+                       msg.message?.extendedTextMessage?.text || '';
+    const imageMsg = msg.message?.imageMessage || null;
+
+    console.log('📨 Message from:', sender, ':', messageText || '[Image]');
+
+    // Save incoming message to Firestore
+    await db.collection('messages').add({
+      sellerId: sender.split('@')[0],
+      direction: 'IN',
+      text: messageText || (imageMsg ? '[Image]' : ''),
+      timestamp: new Date(),
+      hasImage: !!imageMsg
+    });
+
+    // Process with full AI agent pipeline
+    await processIncomingMessage({
+      sender,
+      text: messageText,
+      imageMsg,
+      sock
+    });
+
+  } catch (err) {
+    console.error('❌ Message processing error:', err);
+  }
 }).catch(err => console.error('❌ WhatsApp failed:', err));
 
 // --- WHATSAPP QR PAGE ---
@@ -101,6 +131,24 @@ app.get('/api/whatsapp/qr', (req, res) => {
 
 app.get('/api/whatsapp/status', (req, res) => {
   res.json(getStatus());
+});
+
+// --- RECENT MESSAGES API ---
+app.get('/api/messages/recent', async (req, res) => {
+  try {
+    const snapshot = await db.collection('messages')
+      .orderBy('timestamp', 'desc')
+      .limit(20)
+      .get();
+    const messages = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    res.json(messages);
+  } catch (err) {
+    console.error('Messages fetch error:', err);
+    res.json([]);
+  }
 });
 
 // --- LISTINGS APPROVE/REJECT ---
