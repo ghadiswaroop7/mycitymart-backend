@@ -45,7 +45,6 @@ export default function RootNavigator() {
     let unsubscribe = () => {};
     
     const timer = setTimeout(() => {
-      console.warn('Firebase Auth or Profile took too long, forcing load');
       setIsAuthReady(true);
       setIsTimeout(true);
     }, 4000);

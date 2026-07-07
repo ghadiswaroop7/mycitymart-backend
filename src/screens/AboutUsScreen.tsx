@@ -21,8 +21,12 @@ export default function AboutUsScreen() {
       <ScrollView className="flex-1 px-4 py-4">
         
         <View className="items-center mt-6 mb-8">
-          <View className="w-24 h-24 bg-[#008B45] rounded-3xl items-center justify-center shadow-lg mb-4">
-            <Text className="text-white text-3xl font-black">JP</Text>
+          <View className="w-24 h-24 rounded-3xl items-center justify-center shadow-lg mb-4 overflow-hidden border border-zinc-100 bg-white">
+            <Image 
+              source={require('../../assets/icon.png')} 
+              style={{ width: '100%', height: '100%' }}
+              resizeMode="contain"
+            />
           </View>
           <Text className="text-[#1C1C1C] text-2xl font-black">Jhat-Pat</Text>
           <Text className="text-zinc-500 font-bold tracking-widest mt-1">Version 1.0.0</Text>

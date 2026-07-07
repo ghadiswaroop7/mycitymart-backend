@@ -141,7 +141,7 @@ const ShopCardItem = React.memo(({ shop, onPress }: { shop: any; onPress: () => 
   const ownerName = shop.ownerName || shop.owner || '';
   const shopCategory = shop.category || 'General';
   const shopRating = shop.rating || 4.0;
-  const shopImage = shop.imageUrl || shop.avatarUrl || '';
+  const shopImage = shop.image || shop.imageUrl || shop.banner || shop.logo || shop.avatarUrl || '';
   const isOpen = shop.isOpen !== undefined ? shop.isOpen : (shop.isActive !== false);
 
   return (

@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, ScrollView, Text, ActivityIndicator, Image, TouchableOpacity, StyleSheet, Dimensions, Animated, TextInput, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import LottieView from 'lottie-react-native';
+import Reanimated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
 import { getStorefrontLayouts, getProducts, getLocalShops, getBanners, getActiveFlashDeals, getCategories, createSampleBanners } from '../services/firestoreService';
-import { collection, getDocs, query, where, documentId, orderBy, doc, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, query, where, documentId, orderBy, doc, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 // Setup firestore instance reference
@@ -22,6 +26,140 @@ import SafeImage from '../components/SafeImage';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const ITEM_WIDTH = SCREEN_WIDTH - 24;
+
+// Animated Category Icon with Spinning Gradient Border
+const AnimatedCategoryIcon = ({ cat, idx, onPress }: { cat: any, idx: number, onPress: () => void }) => {
+  const rotation = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const { Easing } = require('react-native');
+    // Stagger start slightly
+    setTimeout(() => {
+      Animated.loop(
+        Animated.timing(rotation, {
+          toValue: 1,
+          duration: 3000,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
+      ).start();
+    }, idx * 100);
+  }, [idx, rotation]);
+
+  const spin = rotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg']
+  });
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={onPress}
+      style={{ alignItems: 'center', marginRight: 16, width: 84 }}
+    >
+      <View style={{
+        width: 76, height: 76, marginBottom: 8, borderRadius: 24,
+        shadowColor: '#EC4899', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 10, elevation: 8,
+      }}>
+        <View style={{ width: '100%', height: '100%', borderRadius: 24, overflow: 'hidden', position: 'relative', backgroundColor: '#F3F4F6' }}>
+        {/* Rotating Outer Mask / Gradient */}
+        <Animated.View style={[{
+          position: 'absolute',
+          top: '-50%', left: '-50%', right: '-50%', bottom: '-50%',
+          transform: [{ rotate: spin }]
+        }]}>
+          <LinearGradient
+            colors={['#7C3AED', '#EC4899', '#7C3AED', '#EC4899', '#7C3AED']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ width: '100%', height: '100%' }}
+          />
+        </Animated.View>
+        
+        {/* Inner Container (Masks out the center) */}
+        <View style={{
+          position: 'absolute',
+          top: 4, bottom: 4, left: 4, right: 4, 
+          borderRadius: 20, 
+          backgroundColor: '#FFFFFF',
+          justifyContent: 'center', alignItems: 'center',
+          overflow: 'hidden'
+        }}>
+          {cat.image ? (
+            <Image source={cat.image} style={{ width: '100%', height: '100%', borderRadius: 20 }} resizeMode="cover" />
+          ) : (
+             <View style={{ width: '100%', height: '100%', backgroundColor: cat.color || '#F3F4F6', justifyContent: 'center', alignItems: 'center', borderRadius: 20 }}>
+                <Text style={{ fontSize: 32 }}>{cat.icon}</Text>
+             </View>
+          )}
+        </View>
+        </View>
+      </View>
+      <Text style={{ fontSize: 12, fontFamily: 'Poppins_500Medium', color: '#1A1A1A', textAlign: 'center', lineHeight: 16 }} numberOfLines={2}>
+        {cat.label}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
+// Animated Breathing Gradient Background
+const AnimatedGradientBackground = ({ colors }: { colors: [string, string, ...string[]] }) => {
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    progress.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 3000 }),
+        withTiming(0, { duration: 3000 })
+      ),
+      -1,
+      true
+    );
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: 0.8 + (progress.value * 0.2), // Breaths between 0.8 and 1.0 opacity
+      transform: [
+        { scale: 1 + (progress.value * 0.05) } // Slight zoom in/out
+      ]
+    };
+  });
+
+  return (
+    <Reanimated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
+      <LinearGradient
+        colors={colors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+    </Reanimated.View>
+  );
+};
+
+// Video Background Component to safely use hooks
+const HeroVideoBackground = ({ source: videoUrl }: { source: string }) => {
+  // Log the video URL right before player initialization
+  const player = useVideoPlayer(videoUrl || '', player => {
+    player.loop = true;
+    player.muted = true;
+    player.play();
+  });
+
+  const lastLoadedUrlRef = useRef<string | null>(videoUrl || null);
+
+  useEffect(() => {
+    if (!player || !videoUrl) return;
+    if (lastLoadedUrlRef.current !== videoUrl) {
+      player.replace(videoUrl);
+      lastLoadedUrlRef.current = videoUrl;
+      player.play();
+    }
+  }, [player, videoUrl]);
+
+  return <VideoView style={StyleSheet.absoluteFill} player={player} contentFit="cover" />;
+};
 
 // Premium Skeleton Loader for fetching states
 const SkeletonLoader = () => {
@@ -128,6 +266,11 @@ const SECTION_THEMES: Record<string, any> = {
     title: 'Summer Mega Sale',
     badge: 'SALE'
   },
+  'carousel': {
+    gradient: ['#10b981', '#3b82f6'],  // green to blue (default carousel)
+    title: 'Featured',
+    badge: 'SALE'
+  },
   'flash_deal': {
     gradient: ['#0F766E', '#3B82F6'],  // teal to blue
     title: '⚡ Flash Deals',
@@ -143,6 +286,56 @@ const SECTION_THEMES: Record<string, any> = {
     title: 'Featured Products',
     badge: 'NEW'
   }
+};
+
+// Determine gradient colors for a carousel section based on title keywords
+const getCarouselGradient = (layout: any): string[] => {
+  // 1. If bgColor is already an array of colors, use it
+  if (Array.isArray(layout.config?.bgColor) && layout.config.bgColor.length >= 2) {
+    return layout.config.bgColor;
+  }
+  // 2. If bgColor is a comma-separated string, parse it
+  if (typeof layout.config?.bgColor === 'string' && layout.config.bgColor.includes(',')) {
+    return layout.config.bgColor.split(',').map((c: string) => c.trim());
+  }
+  // 3. Check backgroundEffect
+  if (layout.config?.backgroundEffect) {
+    const effect = layout.config.backgroundEffect.toLowerCase();
+    if (effect.includes('green') || effect.includes('emerald')) return ['#10b981', '#3b82f6'];
+    if (effect.includes('purple') || effect.includes('violet')) return ['#8b5cf6', '#3b82f6'];
+    if (effect.includes('red') || effect.includes('rose')) return ['#DC2626', '#F97316'];
+    if (effect.includes('teal') || effect.includes('cyan')) return ['#0F766E', '#3b82f6'];
+    if (effect.includes('pink')) return ['#EC4899', '#8b5cf6'];
+  }
+  // 4. Match by section title keywords
+  const title = (layout.title || '').toLowerCase();
+  if (title.includes('rain') || title.includes('monsoon') || title.includes('mega sale')) {
+    return ['#10b981', '#3b82f6'];  // Green to Blue
+  }
+  if (title.includes('summer') || title.includes('hot')) {
+    return ['#8b5cf6', '#3b82f6'];  // Purple to Blue
+  }
+  if (title.includes('winter') || title.includes('cold')) {
+    return ['#1E40AF', '#7C3AED'];  // Blue to Purple
+  }
+  if (title.includes('trending') || title.includes('fire')) {
+    return ['#DC2626', '#F97316'];  // Red to Orange
+  }
+  if (title.includes('flash') || title.includes('deal')) {
+    return ['#0F766E', '#3B82F6'];  // Teal to Blue
+  }
+  if (title.includes('new') || title.includes('arrival')) {
+    return ['#6B21A8', '#EC4899'];  // Purple to Pink
+  }
+  // 5. Fallback: cycle between two default gradients based on layout ID hash
+  const hash = (layout.id || '').split('').reduce((acc: number, c: string) => acc + c.charCodeAt(0), 0);
+  const defaults = [
+    ['#10b981', '#3b82f6'],  // green to blue
+    ['#8b5cf6', '#3b82f6'],  // purple to blue
+    ['#6B21A8', '#EC4899'],  // purple to pink
+    ['#0F766E', '#3B82F6'],  // teal to blue
+  ];
+  return defaults[hash % defaults.length];
 };
 
 const styles_card = StyleSheet.create({
@@ -250,8 +443,126 @@ const styles_card = StyleSheet.create({
   addBtnTextV2: { color: '#fff', fontFamily: 'Poppins_700Bold', fontSize: 13 },
 });
 
+// Carousel-specific card styles — white top (image), dark bottom (info)
+const styles_carousel = StyleSheet.create({
+  card: {
+    width: 160,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+  },
+  ribbon: {
+    position: 'absolute',
+    top: 12,
+    left: 0,
+    backgroundColor: '#7C3AED',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderTopRightRadius: 10,
+    borderBottomRightRadius: 10,
+    zIndex: 3,
+  },
+  ribbonText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: 'bold',
+  },
+  badgesCorner: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    gap: 4,
+    zIndex: 3,
+    alignItems: 'flex-end',
+  },
+  trendBadge: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  trendBadgeText: { fontSize: 9, fontWeight: 'bold', color: '#F97316' },
+  newBadge: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  newBadgeText: { fontSize: 9, fontWeight: 'bold', color: '#fff' },
+  urgencyBadge: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  urgencyBadgeText: { fontSize: 9, fontWeight: 'bold', color: '#fff' },
+  imageWrap: {
+    width: 160,
+    height: 140,
+    backgroundColor: '#FFFFFF',
+  },
+  image: {
+    width: 160,
+    height: 140,
+  },
+  infoWrap: {
+    backgroundColor: '#1E293B',
+    padding: 10,
+  },
+  name: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  price: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  originalPrice: {
+    fontSize: 11,
+    color: '#94A3B8',
+    textDecorationLine: 'line-through',
+  },
+  discountBarBg: {
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 2,
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  discountBarFill: {
+    height: 3,
+    backgroundColor: '#EF4444',
+    borderRadius: 2,
+  },
+  addBtn: {
+    backgroundColor: '#38BDF8',
+    borderRadius: 8,
+    paddingVertical: 7,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  addBtnText: {
+    color: '#000',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+});
+
 // Enhanced Product Card V2 — matches website exactly:
-const ProductCardV2 = ({ product, theme }: any) => {
+const ProductCardV2 = ({ product, theme, badges, isGrid, config }: any) => {
   const dispatch = useDispatch();
   const navigation = useNavigation<any>();
   const discount = product.originalPrice 
@@ -259,61 +570,102 @@ const ProductCardV2 = ({ product, theme }: any) => {
     : 0;
   
   const isLowStock = product.stock && product.stock <= 2;
+  const isDynamic = !!config;
+  const bottomBg = isDynamic ? '#1E293B' : '#ffffff';
+  const textColor = isDynamic ? '#ffffff' : '#1A1A1A';
+  const subTextColor = isDynamic ? '#94A3B8' : '#9CA3AF';
+  const addBtnBg = isDynamic ? '#38BDF8' : '#1A1A1A';
   
   return (
     <TouchableOpacity
-      style={styles_card.productCardV2}
+      style={[styles_card.productCardV2, { width: '100%' }, { backgroundColor: isDynamic ? '#ffffff' : '#fff' }]}
       onPress={() => navigation.navigate('ProductDetail', { productId: product.id })}
       activeOpacity={0.9}
     >
-      {/* Badges row */}
-      <View style={styles_card.badgesRow}>
-        <View style={styles_card.premiumBadge}>
-          <Text style={styles_card.premiumText}>
-            {product.tags?.includes('ai-curated') 
-              ? '🤖 AI CURATED' 
-              : '⭐ PREMIUM'
-            }
-          </Text>
-        </View>
-        <View style={styles_card.newBadge}>
-          <Text style={styles_card.newText}>✨ NEW</Text>
-        </View>
-      </View>
-      
-      {/* Low stock badge */}
-      {isLowStock && (
-        <View style={styles_card.lowStockBadge}>
-          <Text style={styles_card.lowStockText}>
-            Only {product.stock} left!
-          </Text>
-        </View>
+      {/* Dynamic Section Badges */}
+      {isDynamic && (
+        <>
+          {config?.ribbonText && (
+            <View style={{
+              position: 'absolute', top: 12, left: 0,
+              backgroundColor: config.ribbonColor || '#7C3AED',
+              paddingHorizontal: 12, paddingVertical: 4,
+              borderTopRightRadius: 12, borderBottomRightRadius: 12,
+              zIndex: 3
+            }}>
+              <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>
+                {config.ribbonText}
+              </Text>
+            </View>
+          )}
+          
+          <View style={{ position: 'absolute', top: 8, right: 8, gap: 4, zIndex: 3, alignItems: 'flex-end' }}>
+            {badges?.trending && (
+              <View style={{ backgroundColor: '#fff', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 }}>
+                <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#F97316' }}>🔥 Trending</Text>
+              </View>
+            )}
+            {badges?.newArrival && (
+              <View style={{ backgroundColor: '#059669', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
+                <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#fff' }}>✨ NEW</Text>
+              </View>
+            )}
+            {badges?.stockUrgency && (
+              <View style={{ backgroundColor: '#EF4444', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
+                <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#fff' }}>Only 2 left!</Text>
+              </View>
+            )}
+          </View>
+        </>
       )}
-      
-      {/* Trending badge */}
-      {product.tags?.includes('trending') && (
-        <View style={styles_card.trendingBadge}>
-          <Text style={styles_card.trendingText}>🔥 Trending</Text>
-        </View>
+
+      {/* Old Badges (Non-Dynamic) */}
+      {!isDynamic && (
+        <>
+          <View style={styles_card.badgesRow}>
+            {(badges ? badges.premium : true) && (
+              <View style={styles_card.premiumBadge}>
+                <Text style={styles_card.premiumText}>
+                  {product.tags?.includes('ai-curated') ? '🤖 AI CURATED' : '⭐ PREMIUM'}
+                </Text>
+              </View>
+            )}
+            {(badges ? badges.newArrival : true) && (
+              <View style={styles_card.newBadge}>
+                <Text style={styles_card.newText}>✨ NEW</Text>
+              </View>
+            )}
+          </View>
+          {isLowStock && (
+            <View style={styles_card.lowStockBadge}>
+              <Text style={styles_card.lowStockText}>Only {product.stock} left!</Text>
+            </View>
+          )}
+          {product.tags?.includes('trending') && (
+            <View style={styles_card.trendingBadge}>
+              <Text style={styles_card.trendingText}>🔥 Trending</Text>
+            </View>
+          )}
+        </>
       )}
       
       {/* Product Image */}
       <SafeImage
         uri={product.images?.[0] || product.image || product.imageUrl}
-        style={styles_card.productImageV2}
+        style={[styles_card.productImageV2, { width: '100%', height: 170 }]}
         resizeMode="cover"
       />
       
       {/* Product Info */}
-      <View style={styles_card.productInfoV2}>
-        <Text style={styles_card.productNameV2} numberOfLines={2}>
+      <View style={[styles_card.productInfoV2, { backgroundColor: bottomBg }]}>
+        <Text style={[styles_card.productNameV2, { color: textColor }]} numberOfLines={2}>
           {product.name}
         </Text>
         
         <View style={styles_card.priceRowV2}>
-          <Text style={styles_card.priceV2}>₹{product.price}</Text>
+          <Text style={[styles_card.priceV2, { color: textColor }]}>₹{product.price}</Text>
           {product.originalPrice && (
-            <Text style={styles_card.originalPriceV2}>
+            <Text style={[styles_card.originalPriceV2, { color: subTextColor }]}>
               ₹{product.originalPrice}
             </Text>
           )}
@@ -330,7 +682,7 @@ const ProductCardV2 = ({ product, theme }: any) => {
         )}
         
         <TouchableOpacity
-          style={styles_card.addBtnV2}
+          style={[styles_card.addBtnV2, { backgroundColor: addBtnBg }]}
           onPress={(e) => {
             e.stopPropagation();
             dispatch(addToCart({
@@ -344,7 +696,7 @@ const ProductCardV2 = ({ product, theme }: any) => {
             }));
           }}
         >
-          <Text style={styles_card.addBtnTextV2}>ADD</Text>
+          <Text style={[styles_card.addBtnTextV2, { color: isDynamic ? '#000' : '#fff' }]}>ADD</Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -419,33 +771,35 @@ const BannerCarousel = ({ banners }: { banners: any[] }) => {
         ))}
       </ScrollView>
       
-      {/* Dot indicators */}
-      <View style={styles_banner.dotsRow}>
-        {banners.map((_, i) => (
-          <View 
-            key={i} 
-            style={[
-              styles_banner.dot,
-              i === current ? styles_banner.dotActive : styles_banner.dotInactive
-            ]} 
-          />
-        ))}
-      </View>
+      {/* Dot indicators — inside banner, bottom-right */}
+      {banners.length > 1 && (
+        <View style={styles_banner.dotsRow}>
+          {banners.map((_, i) => (
+            <View 
+              key={i} 
+              style={[
+                styles_banner.dot,
+                i === current ? styles_banner.dotActive : styles_banner.dotInactive
+              ]} 
+            />
+          ))}
+        </View>
+      )}
     </View>
   );
 };
 
 const styles_banner = StyleSheet.create({
-  bannerContainer: { marginBottom: 16, overflow: 'hidden' },
+  bannerContainer: { marginBottom: 16, overflow: 'hidden', position: 'relative' },
   bannerImage: { 
     width: SCREEN_WIDTH - 32, 
-    height: 180, 
+    height: 220, 
     borderRadius: 16,
     marginHorizontal: 16
   },
   bannerOverlay: {
     position: 'absolute', bottom: 0, left: 16,
-    right: 16, padding: 16,
+    right: 16, padding: 16, paddingBottom: 28,
     borderBottomLeftRadius: 16,
     borderBottomRightRadius: 16,
     backgroundColor: 'rgba(0,0,0,0.4)',
@@ -469,12 +823,20 @@ const styles_banner = StyleSheet.create({
   },
   bannerCTAText: { color: '#fff', fontWeight: '600' },
   dotsRow: {
-    flexDirection: 'row', justifyContent: 'center',
-    marginTop: 8, gap: 6
+    position: 'absolute',
+    bottom: 12,
+    right: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 12,
   },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  dotActive: { backgroundColor: '#008B45', width: 20 },
-  dotInactive: { backgroundColor: '#ccc' },
+  dot: { height: 6, borderRadius: 3 },
+  dotActive: { backgroundColor: '#FFFFFF', width: 16 },
+  dotInactive: { backgroundColor: 'rgba(255,255,255,0.5)', width: 6 },
 });
 
 const TrustBadges = () => (
@@ -497,11 +859,16 @@ const TrustBadges = () => (
 
 // Colorful Section Card Component:
 const SectionCard = ({ layout }: { layout: any }) => {
+  const dispatch = useDispatch();
+  const navigation = useNavigation<any>();
   const [products, setProducts] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchProducts = async () => {
-      if (!layout.productIds || layout.productIds.length === 0) return;
+      if (!layout.productIds || !Array.isArray(layout.productIds) || layout.productIds.length === 0) {
+        setProducts([]);
+        return;
+      }
       try {
         const chunks = [];
         for (let i = 0; i < layout.productIds.length; i += 10) {
@@ -513,6 +880,9 @@ const SectionCard = ({ layout }: { layout: any }) => {
           const snap = await getDocs(q);
           snap.forEach(doc => fetchedProducts.push({ id: doc.id, ...doc.data() }));
         }
+        
+        // Maintain the order of products as they are in productIds array
+        fetchedProducts.sort((a, b) => layout.productIds.indexOf(a.id) - layout.productIds.indexOf(b.id));
         setProducts(fetchedProducts);
       } catch (e) {
         console.error("Error fetching section products:", e);
@@ -523,6 +893,7 @@ const SectionCard = ({ layout }: { layout: any }) => {
     }
   }, [layout]);
 
+  // ── BANNER TYPE ──
   if (layout.componentType === 'banner') {
     return (
       <View className="w-full mb-6">
@@ -531,14 +902,153 @@ const SectionCard = ({ layout }: { layout: any }) => {
       </View>
     );
   }
-
   const theme = SECTION_THEMES[layout.componentType] || SECTION_THEMES.default;
-  
-  return (
-    <View style={[
-      styles_card.sectionCard,
-      { backgroundColor: theme.gradient[0] }
-    ]}>
+
+  // ══════════════════════════════════════════════════════════════════
+  // ── CAROUSEL TYPE — STRICT HORIZONTAL SCROLL + GRADIENT BG ──
+  // ══════════════════════════════════════════════════════════════════
+  if (layout.componentType === 'carousel') {
+    const gradientColors = getCarouselGradient(layout) as [string, string, ...string[]];
+
+    return (
+      <LinearGradient
+        colors={gradientColors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles_card.sectionCard}
+      >
+        {/* Section Header */}
+        <View style={styles_card.sectionHeader}>
+          <View>
+            {theme.badge && (
+              <View style={styles_card.sectionBadge}>
+                <Text style={styles_card.sectionBadgeText}>{theme.badge}</Text>
+              </View>
+            )}
+            <Text style={styles_card.sectionTitle}>
+              {layout.title || theme.title}
+            </Text>
+          </View>
+          <TouchableOpacity style={styles_card.viewAllBtn}>
+            <Text style={styles_card.viewAllText}>View all →</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* STRICT HORIZONTAL SCROLL — no flex-wrap, no numColumns */}
+        <ScrollView
+          horizontal={true}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingRight: 8, paddingBottom: 8 }}
+        >
+          {products.map((product) => (
+            <View key={product.id} style={{ width: 160, marginRight: 14 }}>
+              <TouchableOpacity
+                style={styles_carousel.card}
+                activeOpacity={0.9}
+                onPress={() => {
+                  // @ts-ignore
+                  navigation?.navigate?.('ProductDetail', { productId: product.id });
+                }}
+              >
+                {/* Top badge ribbon */}
+                {layout.config?.ribbonText && (
+                  <View style={styles_carousel.ribbon}>
+                    <Text style={styles_carousel.ribbonText}>
+                      {layout.config.ribbonText}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Corner badges */}
+                <View style={styles_carousel.badgesCorner}>
+                  {layout.config?.badges?.trending && (
+                    <View style={styles_carousel.trendBadge}>
+                      <Text style={styles_carousel.trendBadgeText}>🔥 Trending</Text>
+                    </View>
+                  )}
+                  {layout.config?.badges?.newArrival && (
+                    <View style={styles_carousel.newBadge}>
+                      <Text style={styles_carousel.newBadgeText}>✨ NEW</Text>
+                    </View>
+                  )}
+                  {layout.config?.badges?.stockUrgency && (
+                    <View style={styles_carousel.urgencyBadge}>
+                      <Text style={styles_carousel.urgencyBadgeText}>Only 2 left!</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* White top half — product image */}
+                <View style={styles_carousel.imageWrap}>
+                  <SafeImage
+                    uri={product.images?.[0] || product.image || product.imageUrl}
+                    style={styles_carousel.image}
+                    resizeMode="cover"
+                  />
+                </View>
+
+                {/* Dark bottom half — title + price */}
+                <View style={styles_carousel.infoWrap}>
+                  <Text style={styles_carousel.name} numberOfLines={2}>
+                    {product.name}
+                  </Text>
+                  <View style={styles_carousel.priceRow}>
+                    <Text style={styles_carousel.price}>₹{product.price}</Text>
+                    {product.originalPrice > 0 && product.originalPrice !== product.price && (
+                      <Text style={styles_carousel.originalPrice}>₹{product.originalPrice}</Text>
+                    )}
+                  </View>
+                  {product.originalPrice > 0 && product.originalPrice !== product.price && (
+                    <View style={styles_carousel.discountBarBg}>
+                      <View style={[
+                        styles_carousel.discountBarFill,
+                        { width: `${Math.min(Math.round((1 - product.price / product.originalPrice) * 100), 100)}%` }
+                      ]} />
+                    </View>
+                  )}
+                  <TouchableOpacity
+                    style={styles_carousel.addBtn}
+                    onPress={() => {
+                      dispatch(addToCart({
+                        id: product.id,
+                        name: product.name,
+                        price: product.price,
+                        originalPrice: product.originalPrice || product.price,
+                        imageUrl: product.images?.[0] || product.image || product.imageUrl,
+                        quantity: 1,
+                        vendor: product.vendor,
+                      }));
+                    }}
+                  >
+                    <Text style={styles_carousel.addBtnText}>ADD</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </ScrollView>
+      </LinearGradient>
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // ── GRID TYPE + OTHER TYPES — existing behaviour preserved ──
+  // ══════════════════════════════════════════════════════════════════
+  const isGrid = layout.componentType === 'grid';
+  const hasGradient = Array.isArray(layout.config?.bgColor) || layout.config?.backgroundEffect || (typeof layout.config?.bgColor === 'string' && layout.config.bgColor.includes(','));
+
+  // Extract gradient colors for grid / other types
+  let gradientColors = theme.gradient;
+  if (Array.isArray(layout.config?.bgColor)) {
+    gradientColors = layout.config.bgColor;
+  } else if (typeof layout.config?.bgColor === 'string' && layout.config.bgColor.includes(',')) {
+    gradientColors = layout.config.bgColor.split(',').map((c: string) => c.trim());
+  } else if (layout.config?.bgColor) {
+    gradientColors = [layout.config.bgColor, layout.config.bgColor];
+  }
+
+  const InnerContent = (
+    <>
       {/* Section Header */}
       <View style={styles_card.sectionHeader}>
         <View>
@@ -556,20 +1066,60 @@ const SectionCard = ({ layout }: { layout: any }) => {
         </TouchableOpacity>
       </View>
       
-      {/* Products horizontal scroll */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 16, gap: 18 }}
+      {/* Grid Layout */}
+      {isGrid ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+          {products.map(product => (
+            <View key={product.id} style={{ width: '48%', marginBottom: 16 }}>
+              <ProductCardV2 
+                product={product}
+                theme={theme}
+                badges={layout.config?.badges}
+                isGrid={true}
+                config={layout.config}
+              />
+            </View>
+          ))}
+        </View>
+      ) : (
+        <ScrollView 
+          horizontal={true}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 16 }}
+        >
+          {products.map((product, index) => (
+            <View key={product.id} style={{ width: 160, marginRight: index === products.length - 1 ? 0 : 16 }}>
+              <ProductCardV2 
+                product={product}
+                theme={theme}
+                badges={layout.config?.badges}
+                isGrid={false}
+                config={layout.config}
+              />
+            </View>
+          ))}
+        </ScrollView>
+      )}
+    </>
+  );
+
+  if (hasGradient) {
+    return (
+      <LinearGradient
+        colors={gradientColors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles_card.sectionCard}
       >
-        {products.map(product => (
-          <ProductCardV2 
-            key={product.id} 
-            product={product}
-            theme={theme}
-          />
-        ))}
-      </ScrollView>
+        {InnerContent}
+      </LinearGradient>
+    );
+  }
+
+  const fallbackBgColor = layout.config?.bgColor || theme.gradient[0];
+  return (
+    <View style={[styles_card.sectionCard, { backgroundColor: fallbackBgColor }]}>
+      {InnerContent}
     </View>
   );
 };
@@ -633,8 +1183,14 @@ const getTabProducts = (tab: string, products: any[]) => {
                subcat.includes('kids') ||
                tags.some((t: string) => t.toLowerCase().includes('kids'));
                
+      case 'BEAUTY':
+        return cat.includes('beauty') || cat.includes('cosmetic') || cat.includes('makeup') ||
+               cat.includes('skincare') || cat.includes('fragrance') || cat.includes('perfume') ||
+               subcat.includes('beauty') || subcat.includes('cosmetic') ||
+               tags.some((t: string) => ['beauty', 'cosmetic', 'makeup', 'skincare', 'perfume'].some(keyword => t.toLowerCase().includes(keyword)));
+               
       default:
-        return true;
+        return false;
     }
   });
 };
@@ -696,6 +1252,24 @@ export default function HomeScreen() {
   const [layouts, setLayouts] = useState<any[]>([]);
   const [loadingLayouts, setLoadingLayouts] = useState(true);
 
+  // Animated Hero Header State
+  const [heroAd, setHeroAd] = useState<any>(null);
+
+  useEffect(() => {
+    const q = query(collection(db, 'hero_header_ads'), where('isActive', '==', true), limit(1));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        setHeroAd({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() });
+      } else {
+        setHeroAd(null);
+      }
+    }, (error) => {
+      console.error('🔴 Error listening to hero_header_ads:', error);
+      setHeroAd(null);
+    });
+    return () => unsubscribe();
+  }, []);
+
   const [products, setProducts] = useState<any[]>([]);
   const [localShops, setLocalShops] = useState<any[]>([]);
   const [banners, setBanners] = useState<any[]>([]);
@@ -711,8 +1285,8 @@ export default function HomeScreen() {
 
   const headerHeight = promoOffers.length > 0
     ? scrollY.interpolate({
-        inputRange: [0, 130],
-        outputRange: [290, 160],
+        inputRange: [0, 170],
+        outputRange: [330, 160],
         extrapolate: 'clamp'
       })
     : 160;
@@ -755,19 +1329,14 @@ export default function HomeScreen() {
   // 1. Live Sync for Promo Offers (banners collection)
   useEffect(() => {
     if (isAuthenticated && profileLoading) {
-      console.log('⏳ Skipping banners sync: Profile is still loading...');
       return;
     }
-
-    console.log('📡 Subscribing to banners collection...');
-
     const q = query(
       collection(db, 'banners'),
       where('status', '==', 'active')
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      console.log('⚡ onSnapshot triggered successfully for banners!');
       let fetchedBanners = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -777,7 +1346,6 @@ export default function HomeScreen() {
         fetchedBanners = fetchedBanners.filter((b: any) => !b.city || b.city === userCity || b.city === 'global' || b.city === 'national');
       }
       fetchedBanners = fetchedBanners.sort((a: any, b: any) => (a.displayOrder || 0) - (b.displayOrder || 0));
-      console.log('🔥 [Firestore Live Sync] Active promo offers (banners) fetched successfully:', fetchedBanners);
       setPromoOffers(fetchedBanners);
       setLoadingPromoOffers(false);
     }, (error) => {
@@ -788,21 +1356,14 @@ export default function HomeScreen() {
   }, [userCity, isAuthenticated, profileLoading]);
 
   // Log banners variable and states right after the banners useEffect
-  console.log('Banners state (promoOffers):', promoOffers);
-  console.log('Banners fetched:', banners);
-
   // 2. Live Sync for Categories
   useEffect(() => {
     if (isAuthenticated && profileLoading) return;
-
-    console.log('📡 Subscribing to categories...');
     const unsubscribe = onSnapshot(collection(db, 'categories'), (snapshot) => {
-      console.log('⚡ onSnapshot triggered for categories!');
       const cats = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-      console.log('📦 [Firestore Live Sync] Categories fetched successfully:', cats);
       setCategoriesData(cats);
       setLoadingCategories(false);
     }, (error) => {
@@ -815,16 +1376,11 @@ export default function HomeScreen() {
   // 3. Live Sync for settings/app document
   useEffect(() => {
     if (isAuthenticated && profileLoading) return;
-
-    console.log('📡 Subscribing to settings/app...');
     const unsubscribe = onSnapshot(doc(db, 'settings', 'app'), (docSnap) => {
-      console.log('⚡ onSnapshot triggered for app settings!');
       if (docSnap.exists()) {
         const data = docSnap.data();
-        console.log('⚙️ [Firestore Live Sync] App settings fetched successfully:', data);
         setLayoutSettings(data);
       } else {
-        console.log('No settings/app document found.');
       }
       setLoadingSettings(false);
     }, (error) => {
@@ -837,7 +1393,6 @@ export default function HomeScreen() {
   // 4. One-time fetch of other static storefront collections
   useEffect(() => {
     if (isAuthenticated && profileLoading) {
-      console.log('⏳ Skipping loadAllData: Profile is still loading...');
       return;
     }
 
@@ -991,8 +1546,8 @@ export default function HomeScreen() {
 
     if (activeTab === 'ALL' && selectedCategory === 'all') {
       const activeSections = getHomepageSections();
-      console.log('🔄 [Storefront Studio] Rendering sections in order:', activeSections.map((s: any) => s.name));
       
+
       return (
         <View className="pt-4 pb-20">
           {activeSections.map((sec: any, idx: number) => {
@@ -1005,7 +1560,7 @@ export default function HomeScreen() {
                   <View key={uniqueKey} style={{
                     marginHorizontal: 16,
                     marginVertical: 12,
-                    height: 180,
+                    height: 220,
                     backgroundColor: '#008B45',
                     borderRadius: 16,
                     justifyContent: 'center',
@@ -1065,11 +1620,18 @@ export default function HomeScreen() {
                     <View className="px-5 mt-6 mb-2 flex-row justify-between items-center">
                       <Text className="text-xl font-black text-[#1C1C1C]">All Products</Text>
                     </View>
-                    <View className="px-5 flex-row flex-wrap justify-between">
+                    <View className="px-5 flex-row justify-between">
                       {products.length === 0 ? (
                          <Text className="text-zinc-500 w-full text-center py-10">No products found</Text>
                       ) : (
-                         products.map(p => <ProductCard key={p.id} product={p} />)
+                         <>
+                           <View style={{ width: '48%' }}>
+                             {products.filter((_, i) => i % 2 === 0).map(p => <ProductCard key={p.id} product={p} />)}
+                           </View>
+                           <View style={{ width: '48%' }}>
+                             {products.filter((_, i) => i % 2 !== 0).map(p => <ProductCard key={p.id} product={p} />)}
+                           </View>
+                         </>
                       )}
                     </View>
                   </View>
@@ -1084,7 +1646,7 @@ export default function HomeScreen() {
 
     // Default Grid for filtered/tabbed products
     return (
-      <View className="px-5 pt-4 pb-20 flex-row flex-wrap justify-between">
+      <View className="px-5 pt-4 pb-20 flex-row justify-between">
         {currentTabProducts.length === 0 ? (
           <View className="w-full items-center justify-center py-10">
             <Text className="text-2xl mb-2">😕</Text>
@@ -1092,7 +1654,14 @@ export default function HomeScreen() {
             <Text className="text-zinc-500">Check Firebase connection or add products</Text>
           </View>
         ) : (
-          currentTabProducts.map(p => <ProductCard key={p.id} product={p} />)
+          <>
+            <View style={{ width: '48%' }}>
+              {currentTabProducts.filter((_, i) => i % 2 === 0).map(p => <ProductCard key={p.id} product={p} />)}
+            </View>
+            <View style={{ width: '48%' }}>
+              {currentTabProducts.filter((_, i) => i % 2 !== 0).map(p => <ProductCard key={p.id} product={p} />)}
+            </View>
+          </>
         )}
       </View>
     );
@@ -1116,24 +1685,50 @@ export default function HomeScreen() {
         left: 0,
         right: 0,
         height: headerHeight,
-        backgroundColor: headerBackgroundColor,
+        backgroundColor: heroAd?.bgType ? 'transparent' : headerBackgroundColor,
         borderBottomLeftRadius: 35,
         borderBottomRightRadius: 35,
         overflow: 'hidden',
         zIndex: 10,
       }}>
+        {/* Dynamic Background Render */}
+        {heroAd?.bgType === 'video' && heroAd?.bgUrl && (
+          <HeroVideoBackground source={heroAd.bgUrl} />
+        )}
+        {heroAd?.bgType === 'lottie' && heroAd?.bgUrl && (
+          <LottieView
+            source={{ uri: heroAd.bgUrl }}
+            autoPlay
+            loop
+            resizeMode="cover"
+            style={StyleSheet.absoluteFill}
+          />
+        )}
+        {heroAd?.bgType === 'animated_gradient' && heroAd?.bgColors && (
+          <AnimatedGradientBackground colors={heroAd.bgColors} />
+        )}
+        
+        {/* Fallback solid background if no ad */}
+        {!heroAd?.bgType && (
+           <View style={[StyleSheet.absoluteFill, { backgroundColor: headerBackgroundColor }]} />
+        )}
+
         <SafeAreaView edges={['top']} style={{ flex: 1 }}>
           <View style={{ paddingHorizontal: 12, flex: 1 }}>
             {/* ── STATIC HEADER CONTENT (Location & Search Bar) ── */}
             {/* Location & Rewards Row */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, marginTop: 8 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
                 <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 6, borderRadius: 20, marginRight: 8 }}>
                   <HugeIcon icon={Home02Icon} size={16} color="#FFFFFF" />
                 </View>
-                <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Text style={{ color: '#FFFFFF', fontFamily: 'Poppins_600SemiBold', fontSize: 13, marginRight: 4 }}>
-                    {profile?.location || profile?.city || 'Swaroop Nagar, Thane'}
+                <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                  <Text 
+                    style={{ color: '#FFFFFF', fontFamily: 'Poppins_600SemiBold', fontSize: 13, marginRight: 4, flexShrink: 1 }}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {profile?.location ? `Home - ${profile.location}` : (profile?.city || 'Swaroop Nagar, Thane')}
                   </Text>
                   <HugeIcon icon={ChevronDownIcon} size={14} color="#FFFFFF" />
                 </TouchableOpacity>
@@ -1147,17 +1742,24 @@ export default function HomeScreen() {
 
             {/* Unified Search & Smart Bar Scanner */}
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 12 }}>
-              <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 12, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, height: 48, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 }}>
+              <TouchableOpacity 
+                activeOpacity={0.9}
+                onPress={() => navigation.navigate('Search')}
+                style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 12, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, height: 48, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 }}
+              >
                 <HugeIcon icon={Search02Icon} size={18} color="#A1A1AA" />
-                <TextInput
-                  style={{ flex: 1, marginLeft: 10, fontSize: 14, fontFamily: 'Poppins_400Regular', color: '#1C1C1C', height: '100%' }}
-                  placeholder='Search "milk"'
-                  placeholderTextColor="#A1A1AA"
-                />
+                <View pointerEvents="none" style={{ flex: 1, marginLeft: 10, height: '100%', justifyContent: 'center' }}>
+                  <TextInput
+                    style={{ fontSize: 14, fontFamily: 'Poppins_400Regular', color: '#1C1C1C' }}
+                    placeholder={heroAd?.searchPlaceholder || 'Search "milk"'}
+                    placeholderTextColor="#A1A1AA"
+                    editable={false}
+                  />
+                </View>
                 <TouchableOpacity style={{ borderLeftWidth: 1, borderLeftColor: '#E4E4E7', paddingLeft: 12 }}>
                    <HugeIcon icon={Camera02Icon} size={18} color="#1C1C1C" />
                 </TouchableOpacity>
-              </View>
+              </TouchableOpacity>
 
               <TouchableOpacity style={{ backgroundColor: 'rgba(0,102,51,0.4)', borderRadius: 12, width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#006633' }}>
                 <HugeIcon icon={QrCodeIcon} size={20} color="#FFFFFF" />
@@ -1259,27 +1861,17 @@ export default function HomeScreen() {
           scrollEventThrottle={16}
         >
           {/* Spacer to align content below expanded header */}
-          <View style={{ height: promoOffers.length > 0 ? 130 : 0 }} />
+          <View style={{ height: promoOffers.length > 0 ? 170 : 0 }} />
           {/* ── CATEGORY ICONS ── */}
           <View className="bg-white">
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: 16, marginTop: 16, paddingBottom: 8 }}>
               {CATEGORIES.map((cat, idx) => (
-                <TouchableOpacity
-                  key={cat.id}
-                  onPress={() => navigation.navigate('CategoryProducts', { categoryId: cat.id, categoryName: cat.label })}
-                  style={{ alignItems: 'center', marginRight: 16, width: 70 }}
-                >
-                  <View style={{
-                    width: 60, height: 60, borderRadius: 30, backgroundColor: cat.color,
-                    justifyContent: 'center', alignItems: 'center', marginBottom: 8,
-                    borderWidth: 1, borderColor: '#F0F0F0'
-                  }}>
-                    <Image source={cat.image} style={{ width: 45, height: 45, borderRadius: 22 }} resizeMode="cover" />
-                  </View>
-                  <Text style={{ fontSize: 11, fontFamily: 'Poppins-Medium', color: '#333', textAlign: 'center' }} numberOfLines={2}>
-                    {cat.label}
-                  </Text>
-                </TouchableOpacity>
+                <AnimatedCategoryIcon 
+                  key={cat.id} 
+                  cat={cat} 
+                  idx={idx} 
+                  onPress={() => navigation.navigate('CategoryProducts', { categoryId: cat.id, categoryName: cat.label })} 
+                />
               ))}
             </ScrollView>
           </View>

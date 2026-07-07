@@ -26,6 +26,7 @@ export interface CartItem {
   quantity: number;
   imageUrl?: string;
   vendor?: string;
+  selectedVariants?: Record<string, string>;
 }
 
 interface CartState {
@@ -85,7 +86,10 @@ const cartSlice = createSlice({
       state.total = totals.total;
     },
     deleteFromCart(state, action: PayloadAction<string>) {
-      state.items = state.items.filter(item => item.id !== action.payload);
+      const index = state.items.findIndex(item => item.id === action.payload);
+      if (index !== -1) {
+        state.items.splice(index, 1);
+      }
       const totals = calculateTotals(state.items);
       state.count = totals.count;
       state.total = totals.total;

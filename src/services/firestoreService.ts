@@ -138,7 +138,6 @@ export const getStorefrontLayouts = async (city?: string) => {
     }
     return layouts;
   } catch (error) {
-    console.warn('getStorefrontLayouts query failed, trying fallback:', error);
     try {
       const snapshot = await getDocs(
         collection(db, 'storefront_layouts')
@@ -348,7 +347,6 @@ export const createSampleBanners = async () => {
       createdAt: serverTimestamp()
     });
   }
-  console.log('✅ Sample banners created!');
 };
 
 // ----------------------------------------------------------------------
@@ -383,7 +381,6 @@ export const getActiveFlashDeals = async () => {
         return now >= start && now <= end && deal.status !== 'expired';
       });
   } catch(e) {
-    console.log('Flash deals error:', e);
     return [];
   }
 };

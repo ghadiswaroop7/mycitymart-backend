@@ -6,7 +6,7 @@ interface HomeTabBarProps {
   onTabChange: (tab: string) => void;
 }
 
-const TABS = ['ALL', 'MEN', 'WOMEN', 'KIDS', 'LOCAL SHOPS'];
+const TABS = ['ALL', 'MEN', 'WOMEN', 'KIDS', 'BEAUTY'];
 
 export default function HomeTabBar({ activeTab, onTabChange }: HomeTabBarProps) {
   return (

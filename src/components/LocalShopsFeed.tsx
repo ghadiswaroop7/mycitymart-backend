@@ -58,15 +58,18 @@ export default function LocalShopsFeed() {
                 className="w-full items-center justify-center relative rounded-t-2xl overflow-hidden"
                 style={{ backgroundColor: themeColor, height: '55%' }}
               >
-                {(shop.imageUrl && shop.imageUrl.length > 0) || (shop.avatarUrl && shop.avatarUrl.length > 0) ? (
-                  <Image
-                    source={{ uri: shop.imageUrl || shop.avatarUrl }}
-                    className="w-full h-full"
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <Text className="text-4xl">🏪</Text>
-                )}
+                {(() => {
+                  const imageUri = shop.image || shop.imageUrl || shop.banner || shop.logo || shop.avatarUrl;
+                  return imageUri && typeof imageUri === 'string' && imageUri.trim().length > 0 ? (
+                    <Image
+                      source={{ uri: imageUri }}
+                      className="w-full h-full"
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Text className="text-4xl">🏪</Text>
+                  );
+                })()}
 
                 {/* Verified Badge Overlay */}
                 {shop.isVerified && (

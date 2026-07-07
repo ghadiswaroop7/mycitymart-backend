@@ -181,10 +181,13 @@ export default function ShopDetailScreen() {
   const ownerName = passedShop?.ownerName || passedShop?.owner || '';
   const shopCategory = passedShop?.category || 'General';
   const shopRating = passedShop?.rating || 4.0;
-  const shopImage = passedShop?.imageUrl || passedShop?.avatarUrl || '';
+  const shopImage = passedShop?.imageUrl || passedShop?.avatarUrl || passedShop?.customImageUrl || '';
+  const shopImages = passedShop?.shopImages?.length > 0 ? passedShop.shopImages : (shopImage ? [shopImage] : []);
   const shopLocation = passedShop?.location || '';
   const isOpen =
     passedShop?.isOpen !== undefined ? passedShop.isOpen : passedShop?.isActive !== false;
+
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
 
   // Fetch products from subcollection
   useEffect(() => {
@@ -274,8 +277,38 @@ export default function ShopDetailScreen() {
         {/* HERO SECTION */}
         {/* ══════════════════════════════════════════════════════════ */}
         <View style={[styles.heroContainer, { height: HERO_HEIGHT }]}>
-          {shopImage ? (
-            <Image source={{ uri: shopImage }} style={styles.heroImage} resizeMode="cover" />
+          {shopImages.length > 0 ? (
+            <>
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onScroll={(e) => {
+                  const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+                  setActiveImageIndex(index);
+                }}
+                scrollEventThrottle={16}
+              >
+                {shopImages.map((img: string, idx: number) => (
+                  <Image key={idx} source={{ uri: img }} style={[styles.heroImage, { width: SCREEN_WIDTH }]} resizeMode="cover" />
+                ))}
+              </ScrollView>
+              
+              {/* Pagination Dots */}
+              {shopImages.length > 1 && (
+                <View style={styles.paginationContainer}>
+                  {shopImages.map((_: any, idx: number) => (
+                    <View
+                      key={idx}
+                      style={[
+                        styles.paginationDot,
+                        activeImageIndex === idx ? styles.paginationDotActive : null
+                      ]}
+                    />
+                  ))}
+                </View>
+              )}
+            </>
           ) : (
             <View style={styles.heroPlaceholder}>
               <Text style={{ fontSize: 60 }}>🏪</Text>
@@ -453,6 +486,28 @@ const styles = StyleSheet.create({
   heroImage: {
     width: '100%',
     height: '100%',
+  },
+  paginationContainer: {
+    position: 'absolute',
+    bottom: '45%',
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    zIndex: 10,
+  },
+  paginationDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.4)',
+  },
+  paginationDotActive: {
+    width: 14,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FFFFFF',
   },
   heroPlaceholder: {
     width: '100%',

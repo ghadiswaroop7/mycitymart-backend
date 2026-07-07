@@ -1,4 +1,4 @@
-import { initializeApp, getApps } from 'firebase/app';
+import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, persistentSingleTabManager, getFirestore } from 'firebase/firestore';
 import { initializeAuth, getAuth, browserLocalPersistence } from 'firebase/auth';
 import { Platform } from 'react-native';
@@ -15,13 +15,12 @@ const firebaseConfig = {
 // ---------------------------------------------------------------------------
 // App — Prevent duplicate initialization (safe for hot-reload)
 // ---------------------------------------------------------------------------
-let app;
+let app: FirebaseApp;
 try {
   app = getApps().length === 0
     ? initializeApp(firebaseConfig)
     : getApps()[0];
 } catch (e) {
-  console.warn('[Firebase] App init error, attempting recovery:', e);
   app = getApps()[0];
 }
 
@@ -84,7 +83,6 @@ try {
         authInstance = getAuth(app);
       } else {
         // Log but don't crash — fall back to getAuth as last resort
-        console.warn('[Firebase] Auth init error:', initError?.message || initError);
         authInstance = getAuth(app);
       }
     }

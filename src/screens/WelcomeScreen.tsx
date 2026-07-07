@@ -33,7 +33,7 @@ const WelcomeScreen = ({ navigation }: any) => {
               style={styles.logoImage}
               resizeMode="contain"
             />
-            <Text style={styles.subtitle}>Fashion style, your world</Text>
+            <Text style={styles.subtitle}>Your Hyperlocal Market, Delivered Jhat-Pat!</Text>
           </View>
 
           {/* ── Center Illustration ── */}

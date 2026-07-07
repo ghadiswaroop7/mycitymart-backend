@@ -2,14 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, FlatList, ActivityIndicator, TouchableOpacity, Keyboard, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { HugeIcon } from '../components/HugeIcon';
-import { Search02Icon, Cancel01Icon, ClockIcon, SlidersHorizontalIcon } from '@hugeicons/core-free-icons';
+import { Search02Icon, Cancel01Icon, ClockIcon, SlidersHorizontalIcon, ArrowLeft01Icon } from '@hugeicons/core-free-icons';
 import { getProducts } from '../services/firestoreService';
 import ProductCard from '../components/ProductCard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 
 export default function SearchScreen() {
   const route = useRoute<any>();
+  const navigation = useNavigation<any>();
   const initialQuery = route.params?.initialQuery || '';
 
   const [searchQuery, setSearchQuery] = useState(initialQuery);
@@ -26,6 +27,8 @@ export default function SearchScreen() {
   const [sortOrder, setSortOrder] = useState('relevance'); // relevance, price_asc, price_desc
   const [inStockOnly, setInStockOnly] = useState(false);
   const [priceRange, setPriceRange] = useState({ min: '', max: '' });
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedBrand, setSelectedBrand] = useState('');
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -33,7 +36,6 @@ export default function SearchScreen() {
         const storedSearches = await AsyncStorage.getItem('recentSearches');
         if (storedSearches) setRecentSearches(JSON.parse(storedSearches));
       } catch (error) {
-        console.log("AsyncStorage read error:", error);
       }
       
       try {
@@ -67,7 +69,6 @@ export default function SearchScreen() {
       setRecentSearches(updatedSearches);
       await AsyncStorage.setItem('recentSearches', JSON.stringify(updatedSearches));
     } catch (e) {
-      console.log("AsyncStorage write error:", e);
     }
   };
 
@@ -77,7 +78,6 @@ export default function SearchScreen() {
     try {
       await AsyncStorage.setItem('recentSearches', JSON.stringify(updated));
     } catch (e) {
-      console.log("AsyncStorage write error:", e);
     }
   };
 
@@ -89,13 +89,22 @@ export default function SearchScreen() {
       const lowerQuery = debouncedQuery.toLowerCase();
       results = results.filter(product => {
         const nameMatch = product.name?.toLowerCase().includes(lowerQuery);
-        const tagsMatch = product.tags?.some((tag: string) => tag.toLowerCase().includes(lowerQuery));
+        const tagsArray = Array.isArray(product.tags) ? product.tags : (typeof product.tags === 'string' ? [product.tags] : []);
+        const tagsMatch = tagsArray.some((tag: string) => tag.toLowerCase().includes(lowerQuery));
         const brandMatch = product.brand?.toLowerCase().includes(lowerQuery);
         const catMatch = product.category?.toLowerCase().includes(lowerQuery);
         return nameMatch || tagsMatch || brandMatch || catMatch;
       });
     } else {
       results = []; // Hide products if no search
+    }
+
+    if (selectedCategory) {
+      results = results.filter(p => p.category?.toLowerCase() === selectedCategory.toLowerCase());
+    }
+
+    if (selectedBrand) {
+      results = results.filter(p => p.brand?.toLowerCase() === selectedBrand.toLowerCase());
     }
 
     if (inStockOnly) {
@@ -116,14 +125,17 @@ export default function SearchScreen() {
     }
 
     setFilteredProducts(results);
-  }, [debouncedQuery, allProducts, sortOrder, inStockOnly, priceRange]);
+  }, [debouncedQuery, allProducts, sortOrder, inStockOnly, priceRange, selectedCategory, selectedBrand]);
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['top']}>
-      <View className="px-5 pt-4 pb-2 bg-white z-10 border-b border-gray-100">
+      <View className="px-5 pt-4 pb-2 bg-white z-10 border-b border-gray-100 shadow-sm">
         <View className="flex-row items-center gap-3">
+          <TouchableOpacity onPress={() => navigation.goBack()} className="p-2 -ml-2 rounded-full active:bg-gray-100">
+            <HugeIcon icon={ArrowLeft01Icon} size={24} color="#1C1C1C" />
+          </TouchableOpacity>
           <View 
-            className={`flex-1 flex-row items-center bg-gray-50 rounded-lg px-3 h-12 border ${
+            className={`flex-1 flex-row items-center bg-gray-50 rounded-lg px-3 h-12 border shadow-sm ${
               isFocused ? 'border-[#008B45]' : 'border-gray-200'
             }`}
           >
@@ -200,7 +212,7 @@ export default function SearchScreen() {
       {/* Filter Modal */}
       <Modal visible={isFilterVisible} animationType="slide" transparent={true}>
         <View className="flex-1 justify-end bg-black/50">
-          <View className="bg-white rounded-t-3xl p-6 min-h-[50%]">
+          <View className="bg-white rounded-t-3xl p-6 min-h-[70%] max-h-[90%]">
             <View className="flex-row justify-between items-center mb-6">
               <Text className="text-xl font-bold text-gray-800">Filters</Text>
               <TouchableOpacity onPress={() => setFilterVisible(false)}>
@@ -208,46 +220,92 @@ export default function SearchScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text className="font-bold text-gray-700 mb-3">Sort By</Text>
-            <View className="flex-row flex-wrap gap-2 mb-6">
-              {['relevance', 'price_asc', 'price_desc'].map(sort => (
-                <TouchableOpacity 
-                  key={sort}
-                  onPress={() => setSortOrder(sort)}
-                  className={`px-4 py-2 rounded-full border ${sortOrder === sort ? 'border-[#008B45] bg-red-50' : 'border-gray-200'}`}
-                >
-                  <Text className={sortOrder === sort ? 'text-[#008B45] font-bold' : 'text-gray-600'}>
-                    {sort === 'relevance' ? 'Relevance' : sort === 'price_asc' ? 'Price: Low to High' : 'Price: High to Low'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <FlatList
+              data={[]}
+              renderItem={() => null}
+              ListHeaderComponent={
+                <View>
+                  <Text className="font-bold text-gray-700 mb-3">Sort By</Text>
+                  <View className="flex-row flex-wrap gap-2 mb-6">
+                    {['relevance', 'price_asc', 'price_desc'].map(sort => (
+                      <TouchableOpacity 
+                        key={sort}
+                        onPress={() => setSortOrder(sort)}
+                        className={`px-4 py-2 rounded-full border ${sortOrder === sort ? 'border-[#008B45] bg-[#E8F5E9]' : 'border-gray-200'}`}
+                      >
+                        <Text className={sortOrder === sort ? 'text-[#008B45] font-bold' : 'text-gray-600'}>
+                          {sort === 'relevance' ? 'Relevance' : sort === 'price_asc' ? 'Price: Low to High' : 'Price: High to Low'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
 
-            <Text className="font-bold text-gray-700 mb-3">Price Range (₹)</Text>
-            <View className="flex-row gap-4 mb-6">
-              <TextInput 
-                className="flex-1 h-12 bg-gray-50 border border-gray-200 rounded-lg px-4 text-gray-800"
-                placeholder="Min"
-                keyboardType="numeric"
-                value={priceRange.min}
-                onChangeText={(val) => setPriceRange(prev => ({...prev, min: val}))}
-              />
-              <TextInput 
-                className="flex-1 h-12 bg-gray-50 border border-gray-200 rounded-lg px-4 text-gray-800"
-                placeholder="Max"
-                keyboardType="numeric"
-                value={priceRange.max}
-                onChangeText={(val) => setPriceRange(prev => ({...prev, max: val}))}
-              />
-            </View>
+                  <Text className="font-bold text-gray-700 mb-3">Category</Text>
+                  <View className="flex-row flex-wrap gap-2 mb-6">
+                    <TouchableOpacity 
+                      onPress={() => setSelectedCategory('')}
+                      className={`px-4 py-2 rounded-full border ${selectedCategory === '' ? 'border-[#008B45] bg-[#E8F5E9]' : 'border-gray-200'}`}
+                    >
+                      <Text className={selectedCategory === '' ? 'text-[#008B45] font-bold' : 'text-gray-600'}>All Categories</Text>
+                    </TouchableOpacity>
+                    {Array.from(new Set(allProducts.map(p => p.category?.trim()).filter(Boolean))).map((cat: any) => (
+                      <TouchableOpacity 
+                        key={cat}
+                        onPress={() => setSelectedCategory(cat)}
+                        className={`px-4 py-2 rounded-full border ${selectedCategory === cat ? 'border-[#008B45] bg-[#E8F5E9]' : 'border-gray-200'}`}
+                      >
+                        <Text className={selectedCategory === cat ? 'text-[#008B45] font-bold' : 'text-gray-600'}>{cat}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
 
-            <TouchableOpacity 
-              onPress={() => setInStockOnly(!inStockOnly)}
-              className={`flex-row items-center justify-between p-4 rounded-lg border ${inStockOnly ? 'border-[#008B45] bg-red-50' : 'border-gray-200'}`}
-            >
-              <Text className={`font-bold ${inStockOnly ? 'text-[#008B45]' : 'text-gray-700'}`}>In Stock Only</Text>
-              <View className={`w-5 h-5 rounded-sm border ${inStockOnly ? 'bg-[#008B45] border-[#008B45]' : 'border-gray-300'}`} />
-            </TouchableOpacity>
+                  <Text className="font-bold text-gray-700 mb-3">Brand</Text>
+                  <View className="flex-row flex-wrap gap-2 mb-6">
+                    <TouchableOpacity 
+                      onPress={() => setSelectedBrand('')}
+                      className={`px-4 py-2 rounded-full border ${selectedBrand === '' ? 'border-[#008B45] bg-[#E8F5E9]' : 'border-gray-200'}`}
+                    >
+                      <Text className={selectedBrand === '' ? 'text-[#008B45] font-bold' : 'text-gray-600'}>All Brands</Text>
+                    </TouchableOpacity>
+                    {Array.from(new Set(allProducts.map(p => p.brand?.trim()).filter(Boolean))).map((brand: any) => (
+                      <TouchableOpacity 
+                        key={brand}
+                        onPress={() => setSelectedBrand(brand)}
+                        className={`px-4 py-2 rounded-full border ${selectedBrand === brand ? 'border-[#008B45] bg-[#E8F5E9]' : 'border-gray-200'}`}
+                      >
+                        <Text className={selectedBrand === brand ? 'text-[#008B45] font-bold' : 'text-gray-600'}>{brand}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text className="font-bold text-gray-700 mb-3">Price Range (₹)</Text>
+                  <View className="flex-row gap-4 mb-6">
+                    <TextInput 
+                      className="flex-1 h-12 bg-gray-50 border border-gray-200 rounded-lg px-4 text-gray-800"
+                      placeholder="Min"
+                      keyboardType="numeric"
+                      value={priceRange.min}
+                      onChangeText={(val) => setPriceRange(prev => ({...prev, min: val}))}
+                    />
+                    <TextInput 
+                      className="flex-1 h-12 bg-gray-50 border border-gray-200 rounded-lg px-4 text-gray-800"
+                      placeholder="Max"
+                      keyboardType="numeric"
+                      value={priceRange.max}
+                      onChangeText={(val) => setPriceRange(prev => ({...prev, max: val}))}
+                    />
+                  </View>
+
+                  <TouchableOpacity 
+                    onPress={() => setInStockOnly(!inStockOnly)}
+                    className={`flex-row items-center justify-between p-4 mb-4 rounded-lg border ${inStockOnly ? 'border-[#008B45] bg-[#E8F5E9]' : 'border-gray-200'}`}
+                  >
+                    <Text className={`font-bold ${inStockOnly ? 'text-[#008B45]' : 'text-gray-700'}`}>In Stock Only</Text>
+                    <View className={`w-5 h-5 rounded-sm border ${inStockOnly ? 'bg-[#008B45] border-[#008B45]' : 'border-gray-300'}`} />
+                  </TouchableOpacity>
+                </View>
+              }
+            />
 
             <TouchableOpacity 
               onPress={() => setFilterVisible(false)}

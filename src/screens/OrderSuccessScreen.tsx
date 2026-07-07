@@ -51,7 +51,7 @@ export default function OrderSuccessScreen() {
           </View>
 
           <TouchableOpacity 
-            onPress={() => navigation.navigate('MainTabs', { screen: 'Profile' })} // User can go to Profile -> Orders
+            onPress={() => navigation.navigate('DeliveryTracking', { orderId })}
             className="bg-[#1C1C1C] w-full py-4 rounded-xl items-center flex-row justify-center mb-3 shadow-md"
           >
             <HugeIcon icon={ShoppingCart01Icon} size={20} color="white" className="mr-2" />

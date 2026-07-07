@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Image, FlatList, TextInput, Alert, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, Image, FlatList, TextInput, Alert, Animated, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { HugeIcon } from '../components/HugeIcon';
 import { ShoppingCart01Icon, MinusSignIcon, Add01Icon, Delete02Icon, TagIcon, ArrowRightIcon, Tick01Icon, Cancel01Icon } from '@hugeicons/core-free-icons';
@@ -68,21 +68,28 @@ export default function CartScreen() {
 
   const handleQuantityDecrease = (item: any) => {
     if (item.quantity === 1) {
-      Alert.alert(
-        "Remove Item",
-        "Are you sure you want to remove this item from your cart?",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Remove", style: "destructive", onPress: () => dispatch(removeFromCart(item.id)) }
-        ]
-      );
+      if (Platform.OS === 'web') {
+        if (window.confirm("Are you sure you want to remove this item from your cart?")) {
+          dispatch(removeFromCart(item.id));
+        }
+      } else {
+        Alert.alert(
+          "Remove Item",
+          "Are you sure you want to remove this item from your cart?",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Remove", style: "destructive", onPress: () => dispatch(removeFromCart(item.id)) }
+          ]
+        );
+      }
     } else {
       dispatch(removeFromCart(item.id));
     }
   };
 
   const renderCartItem = ({ item }: { item: any }) => (
-    <View className="bg-white p-4 mb-3 rounded-xl border border-zinc-100 flex-row shadow-sm mx-4">
+    <View className="bg-white mb-3 rounded-xl border border-zinc-100 shadow-sm mx-4">
+      <View className="p-4 flex-row">
         {/* Image */}
         <View className="w-20 h-20 bg-zinc-50 rounded-lg overflow-hidden border border-zinc-100 mr-4">
           {item.imageUrl ? (
@@ -95,14 +102,40 @@ export default function CartScreen() {
         {/* Info */}
         <View className="flex-1 justify-between py-1">
           <View>
-            <Text className="text-[14px] font-bold text-[#1C1C1C] leading-tight mb-1" numberOfLines={2}>
-              {item.name}
-            </Text>
-            {/* Variants (mocked if not in item) */}
-            <View className="flex-row items-center mb-2">
-              <Text className="text-[10px] text-zinc-500 font-extrabold uppercase mr-2 bg-zinc-100 px-2 py-0.5 rounded">Size: M</Text>
-              <View className="w-3 h-3 rounded-full border border-zinc-300 bg-red-500" />
+            <View className="flex-row justify-between items-start">
+              <Text className="text-[14px] font-bold text-[#1C1C1C] leading-tight mb-1 flex-1 pr-2" numberOfLines={2}>
+                {item.name}
+              </Text>
+              <TouchableOpacity 
+                style={{ padding: 8, margin: -8, zIndex: 20, elevation: 5 }}
+                onPress={() => {
+                  if (Platform.OS === 'web') {
+                    if (window.confirm("Are you sure you want to remove this item?")) {
+                      dispatch(deleteFromCart(item.id));
+                    }
+                  } else {
+                    Alert.alert("Remove Item", "Are you sure you want to remove this item?", [
+                      { text: "Cancel", style: "cancel" },
+                      { text: "Remove", style: "destructive", onPress: () => {
+                        dispatch(deleteFromCart(item.id));
+                      }}
+                    ]);
+                  }
+                }}
+              >
+                <HugeIcon icon={Delete02Icon} size={18} color="#EF4444" />
+              </TouchableOpacity>
             </View>
+            {/* Variants (dynamic from item.selectedVariants) */}
+            {item.selectedVariants && Object.keys(item.selectedVariants).length > 0 && (
+              <View className="flex-row flex-wrap items-center mb-2 gap-1">
+                {Object.entries(item.selectedVariants).map(([key, val]) => (
+                  <Text key={key} className="text-[10px] text-zinc-500 font-extrabold uppercase bg-zinc-100 px-2 py-0.5 rounded">
+                    {key}: {val}
+                  </Text>
+                ))}
+              </View>
+            )}
           </View>
 
           <View className="flex-row items-center justify-between mt-1">
@@ -124,23 +157,8 @@ export default function CartScreen() {
             </View>
           </View>
         </View>
-        
-        {/* Quick Delete */}
-        <TouchableOpacity 
-          className="absolute top-3 right-3 p-2 z-10"
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          onPress={() => {
-            Alert.alert("Remove Item", "Are you sure you want to remove this item?", [
-              { text: "Cancel", style: "cancel" },
-              { text: "Remove", style: "destructive", onPress: () => {
-                dispatch(deleteFromCart(item.id));
-              }}
-            ]);
-          }}
-        >
-          <HugeIcon icon={Delete02Icon} size={18} color="#EF4444" opacity={0.6} />
-        </TouchableOpacity>
       </View>
+    </View>
   );
 
   const renderFooter = () => (

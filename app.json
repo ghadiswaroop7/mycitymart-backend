@@ -51,7 +51,9 @@
             "extraProguardRules": "./proguard-rules.pro"
           }
         }
-      ]
+      ],
+      "expo-image",
+      "expo-video"
     ]
   }
 }

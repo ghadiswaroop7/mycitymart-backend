@@ -55,12 +55,21 @@ export default function EditProfileScreen() {
       // Update redux profile
       await dispatch(fetchUserProfile(uid) as any);
       
-      Alert.alert('Success', 'Profile updated successfully', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
+      if (Platform.OS === 'web') {
+        window.alert('Profile updated successfully');
+        navigation.goBack();
+      } else {
+        Alert.alert('Success', 'Profile updated successfully', [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
+      }
     } catch (e) {
       console.error('Error saving profile:', e);
-      Alert.alert('Error', 'Failed to update profile. Please try again.');
+      if (Platform.OS === 'web') {
+        window.alert('Failed to update profile. Please try again.');
+      } else {
+        Alert.alert('Error', 'Failed to update profile. Please try again.');
+      }
     } finally {
       setIsSaving(false);
     }

@@ -26,7 +26,6 @@ export default function AddressesScreen() {
       const data = await getUserAddresses(uid);
       setAddresses(data);
     } catch (e) {
-      console.log('Error fetching addresses:', e);
     } finally {
       setLoading(false);
     }

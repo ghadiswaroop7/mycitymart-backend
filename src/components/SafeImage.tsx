@@ -1,8 +1,12 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
+
+const blurhash = '|rF?hV%2WCj[ayj[a|j[az_NaeWBj@ayfRayfQfQM{M|azj[azf6fQfQfQIpWXofj[ayj[j[fQayWCoeoeaya}j[ayfQa{oLj?j[WVj[ayayj[fQoff7azayj[ayj[j[ayofayayayj[fQj[ayayj[ayfjj[j[ayjuayj[';
 
 const SafeImage = ({ uri, style, resizeMode = 'cover', ...props }: any) => {
-  const validUri = uri && typeof uri === 'string' && uri.trim() !== '' ? uri : null;
+  // Support both network strings and local asset numbers (from require())
+  const validUri = (uri !== null && uri !== undefined && uri !== '') ? uri : null;
   
   if (!validUri) {
     return (
@@ -19,11 +23,17 @@ const SafeImage = ({ uri, style, resizeMode = 'cover', ...props }: any) => {
     );
   }
   
+  // Map react-native resizeMode to expo-image contentFit
+  const contentFit = resizeMode === 'cover' ? 'cover' : resizeMode === 'contain' ? 'contain' : 'fill';
+
   return (
     <Image
-      source={{ uri: validUri }}
+      source={typeof validUri === 'string' ? { uri: validUri } : validUri}
       style={style}
-      resizeMode={resizeMode}
+      contentFit={contentFit}
+      placeholder={blurhash}
+      transition={200}
+      cachePolicy="memory-disk"
       {...props}
     />
   );

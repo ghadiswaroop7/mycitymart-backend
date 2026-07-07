@@ -13,6 +13,10 @@ export type ShopProps = {
   deliveryTime: string;
   isOpen: boolean;
   imageUrl?: string;
+  image?: string;
+  banner?: string;
+  logo?: string;
+  avatarUrl?: string;
 };
 
 export default function ShopCard({ shop }: { shop: ShopProps }) {
@@ -23,9 +27,16 @@ export default function ShopCard({ shop }: { shop: ShopProps }) {
     >
       {/* Left: Image */}
       <View className="w-20 h-20 rounded-xl bg-gray-100 overflow-hidden mr-4">
-        {shop.imageUrl ? (
-          <Image source={{ uri: shop.imageUrl }} className="w-full h-full" resizeMode="cover" />
-        ) : null}
+        {(() => {
+          const imgUri = shop.image || shop.imageUrl || shop.banner || shop.logo || shop.avatarUrl;
+          return imgUri && typeof imgUri === 'string' && imgUri.trim().length > 0 ? (
+            <Image source={{ uri: imgUri }} className="w-full h-full" resizeMode="cover" />
+          ) : (
+            <View className="w-full h-full justify-center items-center bg-[#FFF3EE]">
+              <Text className="text-3xl">🏪</Text>
+            </View>
+          );
+        })()}
       </View>
 
       {/* Right: Info */}

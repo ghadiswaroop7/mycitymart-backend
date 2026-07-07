@@ -46,7 +46,6 @@ export default function CheckoutScreen() {
       setAddresses(data);
       if (data.length > 0 && !selectedAddress) setSelectedAddress(data[0]);
     } catch (e) {
-      console.log('Error fetching addresses:', e);
     }
   };
 
@@ -79,47 +78,23 @@ export default function CheckoutScreen() {
 
     if (paymentMethod === 'online') {
       try {
-        // Because Firebase Cloud Functions failed to deploy (requires Blaze Plan/Billing),
-        // we must create the order directly from the frontend to enable REAL payments.
-        const base64 = require('base-64');
+        // Securely create Razorpay order via Firebase Cloud Function.
+        // The secret key is stored SERVER-SIDE only (in Firebase Functions config).
+        const { getFunctions, httpsCallable } = require('firebase/functions');
+        const { app } = require('../config/firebase');
+        const functions = getFunctions(app);
+        const createRazorpayOrder = httpsCallable(functions, 'createRazorpayOrder');
+        const result: any = await createRazorpayOrder({ amount: Math.round(grandTotal * 100) });
+        const { orderId, amount: rzpAmount } = result.data;
+
         const keyId = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_SZmD2x3K3iVvis';
-        const keySecret = process.env.EXPO_PUBLIC_RAZORPAY_KEY_SECRET || 'VH2oC5xSJ7AVFIa7HKkx1Pso';
-        
-        const auth = base64.encode(`${keyId}:${keySecret}`);
-
-        // Use a CORS proxy on Web to prevent 'Failed to fetch' blocks by the browser
-        const apiUrl = Platform.OS === 'web' 
-          ? 'https://corsproxy.io/?https://api.razorpay.com/v1/orders'
-          : 'https://api.razorpay.com/v1/orders';
-
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Basic ${auth}`
-          },
-          body: JSON.stringify({
-            amount: Math.round(grandTotal * 100), // Amount in paise
-            currency: 'INR',
-            receipt: `receipt_${uid.substring(0, 5)}_${Date.now()}`,
-            payment_capture: 1
-          })
-        });
-
-        const data = await response.json();
-
-        if (data.error) {
-           throw new Error(data.error.description || 'Razorpay order creation failed');
-        }
-
-        const orderId = data.id;
 
         const options = {
-          description: 'Luxe Clothing Order',
+          description: 'Jhat-Pat Order',
           image: 'https://i.imgur.com/3g7nmJC.png',
           currency: 'INR',
           key: keyId,
-          amount: grandTotal * 100,
+          amount: rzpAmount,
           name: 'Jhat-Pat',
           order_id: orderId,
           prefill: {
@@ -143,7 +118,6 @@ export default function CheckoutScreen() {
             };
             const rzp = new (window as any).Razorpay(webOptions);
             rzp.on('payment.failed', function(response: any) {
-              console.log('Razorpay Web Error:', response.error);
               Alert.alert('Payment Failed', response.error.description || 'Payment was cancelled or failed.');
               setIsPlacingOrder(false);
             });
@@ -162,14 +136,13 @@ export default function CheckoutScreen() {
               finalizeOrder(data.razorpay_payment_id);
             })
             .catch((error: any) => {
-              console.log('Razorpay Native Error:', error);
               Alert.alert('Payment Failed', error.description || 'Payment was cancelled or failed.');
               setIsPlacingOrder(false);
             });
         }
       } catch (err: any) {
         console.error('Razorpay Init Error:', err);
-        Alert.alert('Payment Error', 'Could not initialize payment. ' + err.message);
+        Alert.alert('Payment Error', 'Could not initialize payment. ' + (err.message || 'Please try again.'));
         setIsPlacingOrder(false);
       }
     } else {
