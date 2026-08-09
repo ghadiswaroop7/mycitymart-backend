@@ -55,7 +55,7 @@ export default function MenTab({ products }: { products: any[] }) {
             <Text className="text-white text-[16px] font-extrabold tracking-widest">{formatTime(timeLeft)}</Text>
           </View>
           <Text className="text-white text-[15px] font-extrabold text-center mb-1">FLAT ₹100 OFF</Text>
-          <Text className="text-white/90 text-[10px] mb-4">USE CODE: JHATPAT100</Text>
+          <Text className="text-white/90 text-[10px] mb-4">USE CODE: BAZARPETH100</Text>
           <TouchableOpacity className="bg-white px-6 py-2 rounded-full shadow-sm">
             <Text className="text-[#008B45] text-[12px] font-extrabold">Shop Now →</Text>
           </TouchableOpacity>

@@ -8,8 +8,33 @@ export interface Order {
   subtotal: number;
   deliveryFee: number;
   discountAmount?: number;
-  shippingAddress: any;
-  status: 'placed' | 'confirmed' | 'packed' | 'picked_up' | 'on_the_way' | 'delivered' | 'cancelled';
+  shippingAddress?: any;
+  customerLocation?: {
+    latitude: number;
+    longitude: number;
+    address?: string;
+  };
+  customerDetails?: {
+    uid: string;
+    name: string;
+    phone: string;
+    email?: string;
+    address?: any;
+  };
+  riderId?: string;
+  riderInfo?: {
+    id?: string;
+    name?: string;
+    phone?: string;
+    vehicleNumber?: string;
+    rating?: number;
+  };
+  riderLocation?: {
+    latitude: number;
+    longitude: number;
+    heading?: number;
+  };
+  status: 'pending' | 'assigned' | 'picked_up' | 'delivered' | 'cancelled' | 'placed' | 'confirmed' | 'packed' | 'on_the_way';
   paymentMethod: 'cod' | 'online' | 'wallet';
   createdAt: any;
   updatedAt?: any;

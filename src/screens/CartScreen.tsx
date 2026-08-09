@@ -41,16 +41,19 @@ export default function CartScreen() {
     }
   }, [total]);
 
-  const handleApplyCoupon = async () => {
-    if (!couponCode.trim()) return;
+  const handleApplyCoupon = async (codeToUse?: string) => {
+    const targetCode = codeToUse || couponCode;
+    if (!targetCode.trim()) return;
     setIsApplyingCoupon(true);
     setCouponError('');
     try {
-      const result = await validateCoupon(couponCode, total);
+      const result = await validateCoupon(targetCode, total);
       if (result.valid) {
         setAppliedCoupon(result.coupon);
-        setDiscountAmount((result as any).discount || 0);
+        const discount = (result as any).discount || 0;
+        setDiscountAmount(discount);
         setCouponCode('');
+        Alert.alert('Coupon Applied Successfully!', `Coupon ${result.coupon.code} applied! You saved ₹${discount} on this order.`);
       } else {
         setCouponError((result as any).message || 'Error applying coupon');
       }
@@ -131,7 +134,7 @@ export default function CartScreen() {
               <View className="flex-row flex-wrap items-center mb-2 gap-1">
                 {Object.entries(item.selectedVariants).map(([key, val]) => (
                   <Text key={key} className="text-[10px] text-zinc-500 font-extrabold uppercase bg-zinc-100 px-2 py-0.5 rounded">
-                    {key}: {val}
+                    {String(key)}: {String(val)}
                   </Text>
                 ))}
               </View>
@@ -189,21 +192,39 @@ export default function CartScreen() {
               <TextInput
                 value={couponCode}
                 onChangeText={setCouponCode}
-                placeholder="Enter coupon code"
+                placeholder="Enter coupon code (e.g. BAZARPETH50)"
                 placeholderTextColor="#9CA3AF"
                 className="flex-1 bg-zinc-50 border border-zinc-200 rounded-lg px-4 py-2.5 font-bold text-[#1C1C1C]"
                 autoCapitalize="characters"
               />
               <TouchableOpacity 
-                onPress={handleApplyCoupon}
+                onPress={() => handleApplyCoupon()}
                 disabled={isApplyingCoupon || !couponCode.trim()}
-                className={`ml-2 px-4 py-3 rounded-lg ${couponCode.trim() ? 'bg-[#1C1C1C]' : 'bg-zinc-200'}`}
+                className={`ml-2 px-4 py-3 rounded-lg ${couponCode.trim() ? 'bg-[#008B45]' : 'bg-zinc-200'}`}
               >
                 <Text className={`font-black ${couponCode.trim() ? 'text-white' : 'text-zinc-400'}`}>
                   {isApplyingCoupon ? '...' : 'APPLY'}
                 </Text>
               </TouchableOpacity>
             </View>
+
+            {/* Quick Available Coupons Chips */}
+            <View className="mt-3 pt-3 border-t border-zinc-100 flex-row flex-wrap items-center gap-2">
+              <Text className="text-[11px] font-bold text-zinc-400 mr-1">Available Offers:</Text>
+              <TouchableOpacity 
+                onPress={() => handleApplyCoupon('BAZARPETH50')}
+                className="bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-full flex-row items-center"
+              >
+                <Text className="text-orange-700 font-extrabold text-[10px]">🔥 BAZARPETH50</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={() => handleApplyCoupon('WELCOME50')}
+                className="bg-green-50 border border-green-200 px-2.5 py-1 rounded-full flex-row items-center"
+              >
+                <Text className="text-green-700 font-extrabold text-[10px]">🎉 WELCOME50</Text>
+              </TouchableOpacity>
+            </View>
+
             {couponError ? <Text className="text-red-500 text-xs font-bold mt-2 ml-1">{couponError}</Text> : null}
           </View>
         )}

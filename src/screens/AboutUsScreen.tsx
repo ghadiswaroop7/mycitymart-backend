@@ -28,13 +28,13 @@ export default function AboutUsScreen() {
               resizeMode="contain"
             />
           </View>
-          <Text className="text-[#1C1C1C] text-2xl font-black">Jhat-Pat</Text>
+          <Text className="text-[#1C1C1C] text-2xl font-black">BazarPeth</Text>
           <Text className="text-zinc-500 font-bold tracking-widest mt-1">Version 1.0.0</Text>
         </View>
 
         <View className="bg-white p-5 rounded-xl shadow-sm border border-zinc-100 mb-6">
           <Text className="text-[#1C1C1C] text-base leading-6">
-            Jhat-Pat is your one-stop solution for hyper-local delivery. We connect you with local street vendors (Feriwalas) and shops to bring you the best quality products right to your doorstep, within minutes!
+            BazarPeth is your one-stop solution for hyper-local delivery. We connect you with local street vendors (Feriwalas) and shops to bring you the best quality products right to your doorstep, within minutes!
           </Text>
         </View>
 

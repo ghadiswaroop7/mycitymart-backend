@@ -5,7 +5,7 @@ import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import ProductCard, { ProductProps } from '../components/ProductCard';
 import { HugeIcon } from '../components/HugeIcon';
-import * as Hugeicons from '@hugeicons/core-free-icons';
+import { ArrowLeft01Icon, ShoppingBag01Icon } from '@hugeicons/core-free-icons';
 
 type RouteParams = {
   CategoryProducts: {
@@ -122,7 +122,7 @@ export default function CategoryProductsScreen() {
           onPress={() => navigation.goBack()} 
           style={{ padding: 8, marginRight: 8, marginLeft: -8 }}
         >
-          <HugeIcon icon={Hugeicons.ArrowLeft01Icon} size={24} color="#1A1A1A" />
+          <HugeIcon icon={ArrowLeft01Icon} size={24} color="#1A1A1A" />
         </TouchableOpacity>
         <Text style={{ fontSize: 18, fontFamily: 'Poppins-SemiBold', color: '#1A1A1A' }}>
           {categoryName || 'Category Products'}
@@ -143,7 +143,7 @@ export default function CategoryProductsScreen() {
           columnWrapperStyle={{ justifyContent: 'space-between', marginBottom: 12 }}
           ListEmptyComponent={
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 }}>
-              <HugeIcon icon={Hugeicons.ShoppingBag01Icon} size={64} color="#E0E0E0" />
+              <HugeIcon icon={ShoppingBag01Icon} size={64} color="#E0E0E0" />
               <Text style={{ marginTop: 16, fontSize: 16, fontFamily: 'Poppins-Medium', color: '#666' }}>
                 No products found in this category.
               </Text>

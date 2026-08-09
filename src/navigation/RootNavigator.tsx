@@ -29,6 +29,8 @@ import WelcomeScreen from '../screens/WelcomeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
 
+import { registerForPushNotificationsAsync, setupOrderStatusNotificationListener } from '../services/notificationService';
+
 const Stack = createNativeStackNavigator();
 
 export default function RootNavigator() {
@@ -43,6 +45,7 @@ export default function RootNavigator() {
 
   useEffect(() => {
     let unsubscribe = () => {};
+    let unsubscribeOrders = () => {};
     
     const timer = setTimeout(() => {
       setIsAuthReady(true);
@@ -60,6 +63,10 @@ export default function RootNavigator() {
               photoURL: firebaseUser.photoURL || '',
             }));
             dispatch(fetchUserProfile(firebaseUser.uid) as any);
+
+            // Register push notifications & start real-time order update listener
+            registerForPushNotificationsAsync(firebaseUser.uid);
+            unsubscribeOrders = setupOrderStatusNotificationListener(firebaseUser.uid);
           } else {
             dispatch(logout());
             dispatch(clearProfile());
@@ -77,6 +84,7 @@ export default function RootNavigator() {
 
     return () => { 
       unsubscribe(); 
+      unsubscribeOrders();
       clearTimeout(timer); 
     };
   }, [dispatch]);

@@ -142,7 +142,7 @@ export default function SearchScreen() {
             <HugeIcon icon={Search02Icon} size={20} color={isFocused ? '#008B45' : '#9CA3AF'} />
             <TextInput
               className="flex-1 ml-2 text-[15px] text-gray-800 h-full"
-              placeholder="Search jhat-pat..."
+              placeholder="Search bazarpeth.com..."
               placeholderTextColor="#9CA3AF"
               value={searchQuery}
               onChangeText={setSearchQuery}

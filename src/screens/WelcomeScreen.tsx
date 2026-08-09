@@ -33,7 +33,7 @@ const WelcomeScreen = ({ navigation }: any) => {
               style={styles.logoImage}
               resizeMode="contain"
             />
-            <Text style={styles.subtitle}>Your Hyperlocal Market, Delivered Jhat-Pat!</Text>
+            <Text style={styles.subtitle}>Your Hyperlocal Market, At Your Doorstep!</Text>
           </View>
 
           {/* ── Center Illustration ── */}
@@ -47,7 +47,7 @@ const WelcomeScreen = ({ navigation }: any) => {
 
           {/* ── Bottom Content ── */}
           <View style={styles.bottomSection}>
-            <Text style={styles.heading}>Welcome to JhatPat</Text>
+            <Text style={styles.heading}>Welcome to BazarPeth</Text>
             <Text style={styles.bulletText}>
               Fresh groceries & local essentials,{'\n'}delivered instantly
             </Text>

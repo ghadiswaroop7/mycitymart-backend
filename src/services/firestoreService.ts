@@ -79,31 +79,78 @@ export const addReview = async (productId: string, reviewData: any) => {
 };
 
 export const validateCoupon = async (code: string, subtotal: number) => {
-  const q = query(
-    collection(db, 'coupons'),
-    where('code', '==', code.toUpperCase()),
-    where('isActive', '==', true)
-  );
-  const snapshot = await getDocs(q);
-  if (snapshot.empty) return { valid: false, message: 'Invalid coupon code' };
-  
-  const coupon = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as any;
-  
-  if (coupon.expiryDate && coupon.expiryDate.toDate() < new Date())
-    return { valid: false, message: 'Coupon has expired' };
-  if (coupon.usedCount >= (coupon.usageLimit || Infinity))
-    return { valid: false, message: 'Coupon usage limit reached' };
-  if (subtotal < (coupon.minOrderValue || coupon.minPurchase || 0))
-    return { valid: false, message: `Min order value ₹${coupon.minOrderValue || coupon.minPurchase} required` };
-  
-  const discount = coupon.type === 'flat' 
-    ? coupon.value 
-    : Math.min(
-        (subtotal * coupon.value) / 100,
-        coupon.maxDiscount || Infinity
-      );
-  
-  return { valid: true, coupon, discount: Math.round(discount) };
+  const cleanCode = code.trim().toUpperCase();
+  try {
+    const q = query(
+      collection(db, 'coupons'),
+      where('code', '==', cleanCode),
+      where('isActive', '==', true)
+    );
+    const snapshot = await getDocs(q);
+    
+    if (!snapshot.empty) {
+      const coupon = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as any;
+      
+      const expiry = coupon.expiryDate?.toDate?.() || (coupon.expiryDate ? new Date(coupon.expiryDate) : null);
+      if (expiry && expiry < new Date())
+        return { valid: false, message: 'Coupon has expired' };
+      if (coupon.usedCount >= (coupon.usageLimit || Infinity))
+        return { valid: false, message: 'Coupon usage limit reached' };
+      if (subtotal < (coupon.minOrderValue || coupon.minPurchase || 0))
+        return { valid: false, message: `Min order value ₹${coupon.minOrderValue || coupon.minPurchase} required` };
+      
+      const discount = coupon.type === 'flat' 
+        ? coupon.value 
+        : Math.min(
+            (subtotal * coupon.value) / 100,
+            coupon.maxDiscount || Infinity
+          );
+      
+      return { valid: true, coupon, discount: Math.round(discount) };
+    }
+  } catch (e) {
+    console.warn('Firestore coupon query check failed, trying fallback:', e);
+  }
+
+  // Fallback Promo Codes (e.g. BAZARPETH50, WELCOME50, FREESHIP)
+  const defaultCoupons: Record<string, any> = {
+    'BAZARPETH50': {
+      code: 'BAZARPETH50',
+      type: 'percentage',
+      value: 50,
+      maxDiscount: 150,
+      minOrderValue: 199,
+      description: '50% OFF up to ₹150 on orders above ₹199'
+    },
+    'WELCOME50': {
+      code: 'WELCOME50',
+      type: 'flat',
+      value: 50,
+      minOrderValue: 99,
+      description: 'Flat ₹50 OFF on your first order'
+    },
+    'FREESHIP': {
+      code: 'FREESHIP',
+      type: 'flat',
+      value: 40,
+      minOrderValue: 149,
+      description: 'Free Shipping on orders above ₹149'
+    }
+  };
+
+  const matched = defaultCoupons[cleanCode];
+  if (matched) {
+    if (subtotal < matched.minOrderValue) {
+      return { valid: false, message: `Min order value ₹${matched.minOrderValue} required for ${cleanCode}` };
+    }
+    const discount = matched.type === 'flat'
+      ? matched.value
+      : Math.min((subtotal * matched.value) / 100, matched.maxDiscount || Infinity);
+
+    return { valid: true, coupon: matched, discount: Math.round(discount) };
+  }
+
+  return { valid: false, message: 'Invalid coupon code. Try BAZARPETH50 or WELCOME50' };
 };
 
 export const getAvailableCoupons = async (): Promise<Coupon[]> => {
@@ -156,6 +203,14 @@ export const getStorefrontLayouts = async (city?: string) => {
   }
 };
 
+export const saveUserPushToken = async (uid: string, token: string) => {
+  const userRef = doc(db, 'users', uid);
+  await setDoc(userRef, {
+    pushToken: token,
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+};
+
 // ----------------------------------------------------------------------
 // ORDERS API
 // ----------------------------------------------------------------------
@@ -206,6 +261,49 @@ export const subscribeToUserOrders = (uid: string, callback: (orders: any[]) => 
     callback(orders);
   });
 };
+
+export const subscribeToOrder = (orderId: string, callback: (order: any) => void) => {
+  const orderRef = doc(db, 'orders', orderId);
+  return onSnapshot(orderRef, (snapshot) => {
+    if (snapshot.exists()) {
+      callback({ id: snapshot.id, ...snapshot.data() });
+    } else {
+      callback(null);
+    }
+  });
+};
+
+export const subscribeToRiderLocation = (riderId: string, callback: (locationData: any) => void) => {
+  // Listen to rider_locations collection first
+  const locationRef = doc(db, 'rider_locations', riderId);
+  return onSnapshot(locationRef, (snapshot) => {
+    if (snapshot.exists()) {
+      callback(snapshot.data());
+    } else {
+      // Fallback check on delivery_partners collection if rider_locations doc is empty
+      const partnerRef = doc(db, 'delivery_partners', riderId);
+      getDoc(partnerRef).then((partnerSnap) => {
+        if (partnerSnap.exists()) {
+          const data = partnerSnap.data();
+          if (data.location || (data.latitude && data.longitude)) {
+            callback({
+              latitude: data.latitude || data.location?.latitude,
+              longitude: data.longitude || data.location?.longitude,
+              heading: data.heading || 0,
+              speed: data.speed || 0,
+              updatedAt: data.updatedAt
+            });
+          } else {
+            callback(null);
+          }
+        } else {
+          callback(null);
+        }
+      }).catch(() => callback(null));
+    }
+  });
+};
+
 
 // ----------------------------------------------------------------------
 // ADDRESSES API
@@ -352,12 +450,15 @@ export const createSampleBanners = async () => {
 // ----------------------------------------------------------------------
 // BANNERS API
 // ----------------------------------------------------------------------
-export const getBanners = async (city?: string) => {
+export const getBanners = async (city?: string, targetTab?: string) => {
   try {
     const snapshot = await getDocs(collection(db, 'banners'));
     let banners = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     if (city) {
       banners = banners.filter((b: any) => !b.city || b.city === city || b.city === 'global' || b.city === 'national');
+    }
+    if (targetTab && targetTab !== 'ALL') {
+      banners = banners.filter((b: any) => b.targetTab === targetTab || b.category === targetTab || b.placement === targetTab);
     }
     return banners.sort((a: any, b: any) => (a.displayOrder || 0) - (b.displayOrder || 0));
   } catch (error) {

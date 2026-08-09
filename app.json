@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "jhat-pat-mobile-app",
+    "name": "BazarPeth",
     "slug": "jhat-pat-mobile-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,9 +9,9 @@
     "ios": {
       "supportsTablet": true
     },
-    "scheme": "jhatpat",
+    "scheme": "bazarpeth",
     "android": {
-      "package": "com.jhatpat.app",
+      "package": "com.bazarpeth.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",

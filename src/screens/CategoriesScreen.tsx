@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { HugeIcon } from '../components/HugeIcon';
-import * as Hugeicons from '@hugeicons/core-free-icons';
+import { Search01Icon } from '@hugeicons/core-free-icons';
 import { CATEGORIES } from '../config/categories';
 import { COLORS } from '../styles/theme';
 
@@ -793,7 +793,7 @@ export default function CategoriesScreen() {
       <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' }}>
         <Text style={{ fontSize: 20, fontFamily: 'Poppins-SemiBold', color: '#1A1A1A', marginBottom: 12 }}>Categories</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F5F5', borderRadius: 8, paddingHorizontal: 12, height: 44 }}>
-          <HugeIcon icon={Hugeicons.Search01Icon} size={20} color="#666" />
+          <HugeIcon icon={Search01Icon} size={20} color="#666" />
           <TextInput 
             placeholder="Search categories..."
             style={{ flex: 1, marginLeft: 8, fontSize: 14, fontFamily: 'Poppins-Regular', color: '#333' }}

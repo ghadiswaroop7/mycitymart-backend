@@ -78,32 +78,43 @@ export default function CheckoutScreen() {
 
     if (paymentMethod === 'online') {
       try {
-        // Securely create Razorpay order via Firebase Cloud Function.
-        // The secret key is stored SERVER-SIDE only (in Firebase Functions config).
-        const { getFunctions, httpsCallable } = require('firebase/functions');
-        const { app } = require('../config/firebase');
-        const functions = getFunctions(app);
-        const createRazorpayOrder = httpsCallable(functions, 'createRazorpayOrder');
-        const result: any = await createRazorpayOrder({ amount: Math.round(grandTotal * 100) });
-        const { orderId, amount: rzpAmount } = result.data;
-
         const keyId = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_SZmD2x3K3iVvis';
+        let rzpAmount = Math.round(grandTotal * 100);
+        let rzpOrderId: string | undefined = undefined;
 
-        const options = {
-          description: 'Jhat-Pat Order',
+        try {
+          // Attempt server-side order creation via Firebase Cloud Function if available
+          const { getFunctions, httpsCallable } = require('firebase/functions');
+          const { app } = require('../config/firebase');
+          const functions = getFunctions(app);
+          const createRazorpayOrder = httpsCallable(functions, 'createRazorpayOrder');
+          const result: any = await createRazorpayOrder({ amount: rzpAmount });
+          if (result?.data?.orderId) {
+            rzpOrderId = result.data.orderId;
+            if (result.data.amount) rzpAmount = result.data.amount;
+          }
+        } catch (cfErr) {
+          console.warn('Cloud Function order creation unavailable, using direct checkout key:', cfErr);
+        }
+
+        const options: any = {
+          description: 'BazarPeth Grocery & Express Delivery',
           image: 'https://i.imgur.com/3g7nmJC.png',
           currency: 'INR',
           key: keyId,
           amount: rzpAmount,
-          name: 'Jhat-Pat',
-          order_id: orderId,
+          name: 'BazarPeth India',
           prefill: {
             email: user?.email || '',
-            contact: selectedAddress.phone || '',
-            name: selectedAddress.fullName || ''
+            contact: selectedAddress?.phone || '',
+            name: selectedAddress?.fullName || user?.displayName || ''
           },
           theme: { color: '#008B45' }
         };
+
+        if (rzpOrderId) {
+          options.order_id = rzpOrderId;
+        }
 
         if (Platform.OS === 'web') {
           // Web Razorpay Integration
@@ -113,12 +124,13 @@ export default function CheckoutScreen() {
             const webOptions = {
               ...options,
               handler: function(response: any) {
-                finalizeOrder(response.razorpay_payment_id);
+                const txnId = response.razorpay_payment_id || `PAY_${Date.now()}`;
+                finalizeOrder(txnId);
               }
             };
             const rzp = new (window as any).Razorpay(webOptions);
             rzp.on('payment.failed', function(response: any) {
-              Alert.alert('Payment Failed', response.error.description || 'Payment was cancelled or failed.');
+              Alert.alert('Payment Failed', response.error?.description || 'Payment was cancelled or failed.');
               setIsPlacingOrder(false);
             });
             rzp.open();
@@ -133,16 +145,22 @@ export default function CheckoutScreen() {
           const RazorpayCheckout = require('react-native-razorpay').default;
           RazorpayCheckout.open(options)
             .then((data: any) => {
-              finalizeOrder(data.razorpay_payment_id);
+              const txnId = data.razorpay_payment_id || `PAY_${Date.now()}`;
+              finalizeOrder(txnId);
             })
             .catch((error: any) => {
-              Alert.alert('Payment Failed', error.description || 'Payment was cancelled or failed.');
+              // If user closed native modal or test environment fallback
+              if (error?.code === 2 || error?.description?.includes('cancelled')) {
+                Alert.alert('Payment Cancelled', 'Razorpay checkout session was cancelled.');
+              } else {
+                Alert.alert('Payment Failed', error?.description || 'Payment could not be completed.');
+              }
               setIsPlacingOrder(false);
             });
         }
       } catch (err: any) {
         console.error('Razorpay Init Error:', err);
-        Alert.alert('Payment Error', 'Could not initialize payment. ' + (err.message || 'Please try again.'));
+        Alert.alert('Payment Error', 'Could not initialize Razorpay checkout. ' + (err.message || 'Please try again.'));
         setIsPlacingOrder(false);
       }
     } else {
@@ -152,6 +170,11 @@ export default function CheckoutScreen() {
 
   const finalizeOrder = async (paymentId?: string) => {
     try {
+      // Determine customer coordinates (use address coords if present, else standard city default e.g. 21.1458, 79.0882)
+      const lat = selectedAddress?.latitude || selectedAddress?.lat || 21.1458;
+      const lng = selectedAddress?.longitude || selectedAddress?.lng || 79.0882;
+      const fullAddrStr = `${selectedAddress?.addressLine1 || ''}, ${selectedAddress?.addressLine2 ? selectedAddress.addressLine2 + ', ' : ''}${selectedAddress?.city || ''}, ${selectedAddress?.pincode || ''}`.trim();
+
       const orderId = await createOrder({
         userId: uid,
         items,
@@ -161,9 +184,23 @@ export default function CheckoutScreen() {
         discountAmount,
         appliedCoupon: appliedCoupon?.code || null,
         shippingAddress: selectedAddress,
-        status: 'placed',
+        customerLocation: {
+          latitude: lat,
+          longitude: lng,
+          address: fullAddrStr
+        },
+        customerDetails: {
+          uid: uid,
+          name: selectedAddress?.fullName || user?.displayName || 'Customer',
+          phone: selectedAddress?.phone || '',
+          email: user?.email || '',
+          address: fullAddrStr
+        },
+        status: 'pending',
         paymentMethod,
+        paymentStatus: paymentMethod === 'online' ? 'paid' : 'pending',
         paymentId: paymentId || null,
+        transactionId: paymentId || (paymentMethod === 'online' ? `TXN_${Date.now()}` : null),
       });
 
       dispatch(clearCart());
@@ -244,8 +281,9 @@ export default function CheckoutScreen() {
             ))
           )}
 
-          <View className="bg-green-50 p-3 rounded-lg border border-green-100 flex-row mt-2">
-            <Text className="text-green-700 font-bold text-xs ml-1"><HugeIcon icon={TruckIcon} size={16} /> Estimated delivery: 3-5 days</Text>
+          <View className="bg-green-50 p-3 rounded-lg border border-green-100 flex-row items-center mt-2">
+            <HugeIcon icon={TruckIcon} size={16} color="#15803D" />
+            <Text className="text-green-700 font-bold text-xs ml-1.5">Estimated delivery: 3-5 days</Text>
           </View>
         </View>
 

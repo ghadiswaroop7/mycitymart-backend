@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import LottieView from 'lottie-react-native';
 import Reanimated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
+import Svg, { Path, ClipPath, Defs, G, Image as SvgImage } from 'react-native-svg';
 import { getStorefrontLayouts, getProducts, getLocalShops, getBanners, getActiveFlashDeals, getCategories, createSampleBanners } from '../services/firestoreService';
 import { collection, getDocs, query, where, documentId, orderBy, doc, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -18,6 +19,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { addToCart } from '../store/slices/cartSlice';
 import { RootState } from '../store';
 import { CATEGORIES } from '../config/categories';
+import { TAB_THEMES } from '../config/tabThemes';
 
 import HomeTabBar from '../components/HomeTabBar';
 import ProductCard from '../components/ProductCard';
@@ -25,78 +27,157 @@ import MiniProductCard from '../components/MiniProductCard';
 import SafeImage from '../components/SafeImage';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const ITEM_WIDTH = SCREEN_WIDTH - 24;
+const BANNER_ASPECT_RATIO = 2.4;
+const BANNER_HEIGHT = Math.round(SCREEN_WIDTH / BANNER_ASPECT_RATIO);
+const HERO_TOP_PADDING = 92;
+const TOTAL_HEADER_HEIGHT = BANNER_HEIGHT + HERO_TOP_PADDING;
 
-// Animated Category Icon with Spinning Gradient Border
+// Organic Blob Paths matching user's exact 4 reference image shapes
+const ORGANIC_BLOBS = [
+  // Shape 1 (Fruit Basket: 4 distinct lobes, pinched waist)
+  "M 26,14 C 45,20 68,6 82,14 C 96,26 82,48 92,68 C 98,84 74,94 48,88 C 28,82 12,86 10,68 C 8,48 12,24 26,14 Z",
+  // Shape 2 (Coffee: wide top right bulge, pinched lower right)
+  "M 30,10 C 58,4 82,10 92,32 C 100,54 78,66 90,86 C 82,98 52,90 28,94 C 10,92 8,68 10,48 C 12,26 12,14 30,10 Z",
+  // Shape 3 (Fashion: tall left lobe, flared bottom right)
+  "M 20,8 C 46,18 78,8 88,24 C 96,40 76,60 88,80 C 94,94 60,96 34,92 C 12,88 6,66 8,42 C 10,20 6,10 20,8 Z",
+  // Shape 4 (Perfume: high top-right lobe, smooth bottom curve)
+  "M 24,18 C 50,14 84,6 92,26 C 98,46 84,66 94,84 C 90,96 56,94 30,90 C 12,86 8,64 10,42 C 12,22 8,20 24,18 Z",
+];
+
+// Category Icon (Organic Blob Shape with Animated Breathing Glow Border)
 const AnimatedCategoryIcon = ({ cat, idx, onPress }: { cat: any, idx: number, onPress: () => void }) => {
-  const rotation = useRef(new Animated.Value(0)).current;
+  const blobPath = ORGANIC_BLOBS[idx % ORGANIC_BLOBS.length];
+  const size = 78;
+  const glowSize = size + 8; // slightly larger for glow ring
+  const clipId = `blobClip-${cat.id || idx}`;
+  const imageSrc = cat.image || cat.iconUrl;
+  const resolvedSrc = typeof imageSrc === 'string' ? { uri: imageSrc } : imageSrc;
+
+  // Each icon gets a staggered animation start so they don't all pulse in sync
+  const glowOpacity = useSharedValue(0.3);
 
   useEffect(() => {
-    const { Easing } = require('react-native');
-    // Stagger start slightly
-    setTimeout(() => {
-      Animated.loop(
-        Animated.timing(rotation, {
-          toValue: 1,
-          duration: 3000,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        })
-      ).start();
-    }, idx * 100);
-  }, [idx, rotation]);
+    glowOpacity.value = withRepeat(
+      withSequence(
+        withTiming(0.9, { duration: 1400 + idx * 200 }),
+        withTiming(0.25, { duration: 1400 + idx * 200 })
+      ),
+      -1,
+      true
+    );
+  }, []);
 
-  const spin = rotation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg']
-  });
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value,
+  }));
+
+  // Gradient glow colors per icon for variety
+  const GLOW_COLORS = ['#EC4899', '#8B5CF6', '#3B82F6', '#F97316'];
+  const glowColor = GLOW_COLORS[idx % GLOW_COLORS.length];
 
   return (
     <TouchableOpacity
-      activeOpacity={0.9}
+      activeOpacity={0.85}
       onPress={onPress}
-      style={{ alignItems: 'center', marginRight: 16, width: 84 }}
+      style={{ alignItems: 'center', marginRight: 14, width: 82 }}
     >
-      <View style={{
-        width: 76, height: 76, marginBottom: 8, borderRadius: 24,
-        shadowColor: '#EC4899', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 10, elevation: 8,
-      }}>
-        <View style={{ width: '100%', height: '100%', borderRadius: 24, overflow: 'hidden', position: 'relative', backgroundColor: '#F3F4F6' }}>
-        {/* Rotating Outer Mask / Gradient */}
-        <Animated.View style={[{
-          position: 'absolute',
-          top: '-50%', left: '-50%', right: '-50%', bottom: '-50%',
-          transform: [{ rotate: spin }]
-        }]}>
-          <LinearGradient
-            colors={['#7C3AED', '#EC4899', '#7C3AED', '#EC4899', '#7C3AED']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ width: '100%', height: '100%' }}
+      <View style={{ width: glowSize, height: glowSize, justifyContent: 'center', alignItems: 'center', position: 'relative', marginBottom: 4 }}>
+        {/* Animated Spread Glow — OUTSIDE only, clipped so nothing bleeds inward */}
+        <Reanimated.View style={[{ position: 'absolute', top: 0, left: 0, width: glowSize, height: glowSize }, glowStyle]}>
+          <Svg width={glowSize} height={glowSize} viewBox="-8 -8 116 116">
+            <Defs>
+              {/* Inverse clip: big rect minus blob shape = only outside area visible */}
+              <ClipPath id={`outerGlow-${cat.id || idx}`}>
+                <Path
+                  d={`M -20,-20 L 120,-20 L 120,120 L -20,120 Z ${blobPath}`}
+                  clipRule="evenodd"
+                  fillRule="evenodd"
+                />
+              </ClipPath>
+            </Defs>
+            <G clipPath={`url(#outerGlow-${cat.id || idx})`}>
+              {/* Outermost soft spread layer */}
+              <Path
+                d={blobPath}
+                fill="none"
+                stroke={glowColor}
+                strokeWidth="16"
+                strokeLinejoin="round"
+                opacity={0.12}
+              />
+              {/* Mid spread layer */}
+              <Path
+                d={blobPath}
+                fill="none"
+                stroke={glowColor}
+                strokeWidth="10"
+                strokeLinejoin="round"
+                opacity={0.28}
+              />
+              {/* Inner glow layer (tight to edge) */}
+              <Path
+                d={blobPath}
+                fill="none"
+                stroke={glowColor}
+                strokeWidth="5"
+                strokeLinejoin="round"
+                opacity={0.5}
+              />
+            </G>
+          </Svg>
+        </Reanimated.View>
+
+        {/* Main Icon (exact same shape, size, fill, clip, border) */}
+        <Svg width={size} height={size} viewBox="0 0 100 100">
+          <Defs>
+            <ClipPath id={clipId}>
+              <Path d={blobPath} />
+            </ClipPath>
+          </Defs>
+
+          {/* Warm Cream Base Fill */}
+          <Path d={blobPath} fill="#FFEEDC" />
+
+          {/* Image Clipped 100% inside the Organic Blob Contour */}
+          {imageSrc ? (
+            <G clipPath={`url(#${clipId})`}>
+              <SvgImage
+                href={resolvedSrc}
+                x="0"
+                y="0"
+                width="100"
+                height="100"
+                preserveAspectRatio="xMidYMid slice"
+              />
+            </G>
+          ) : null}
+
+          {/* Sharp Dark Navy Outline Border */}
+          <Path
+            d={blobPath}
+            fill="none"
+            stroke="#172136"
+            strokeWidth="3.5"
+            strokeLinejoin="round"
           />
-        </Animated.View>
-        
-        {/* Inner Container (Masks out the center) */}
-        <View style={{
-          position: 'absolute',
-          top: 4, bottom: 4, left: 4, right: 4, 
-          borderRadius: 20, 
-          backgroundColor: '#FFFFFF',
-          justifyContent: 'center', alignItems: 'center',
-          overflow: 'hidden'
-        }}>
-          {cat.image ? (
-            <Image source={cat.image} style={{ width: '100%', height: '100%', borderRadius: 20 }} resizeMode="cover" />
-          ) : (
-             <View style={{ width: '100%', height: '100%', backgroundColor: cat.color || '#F3F4F6', justifyContent: 'center', alignItems: 'center', borderRadius: 20 }}>
-                <Text style={{ fontSize: 32 }}>{cat.icon}</Text>
-             </View>
-          )}
-        </View>
-        </View>
+        </Svg>
+
+        {!imageSrc && (
+          <Text style={{ position: 'absolute', fontSize: 32, zIndex: 2 }}>{cat.icon || '🛍️'}</Text>
+        )}
       </View>
-      <Text style={{ fontSize: 12, fontFamily: 'Poppins_500Medium', color: '#1A1A1A', textAlign: 'center', lineHeight: 16 }} numberOfLines={2}>
-        {cat.label}
+
+      <Text
+        style={{
+          fontSize: 11,
+          fontFamily: 'Poppins_600SemiBold',
+          color: '#1E293B',
+          textAlign: 'center',
+          lineHeight: 15,
+        }}
+        numberOfLines={2}
+      >
+        {cat.label || cat.name}
       </Text>
     </TouchableOpacity>
   );
@@ -790,53 +871,53 @@ const BannerCarousel = ({ banners }: { banners: any[] }) => {
 };
 
 const styles_banner = StyleSheet.create({
-  bannerContainer: { marginBottom: 16, overflow: 'hidden', position: 'relative' },
+  bannerContainer: { marginBottom: 12, overflow: 'hidden', position: 'relative' },
   bannerImage: { 
     width: SCREEN_WIDTH - 32, 
-    height: 220, 
-    borderRadius: 16,
+    height: 145, 
+    borderRadius: 14,
     marginHorizontal: 16
   },
   bannerOverlay: {
     position: 'absolute', bottom: 0, left: 16,
-    right: 16, padding: 16, paddingBottom: 28,
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    right: 16, padding: 10, paddingBottom: 12,
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.45)',
     overflow: 'hidden'
   },
   bannerBadge: {
     backgroundColor: '#FF4500',
-    paddingHorizontal: 8, paddingVertical: 3,
+    paddingHorizontal: 6, paddingVertical: 2,
     borderRadius: 4, alignSelf: 'flex-start',
-    marginBottom: 6
+    marginBottom: 4
   },
-  bannerBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  bannerBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
   bannerTitle: { 
-    color: '#fff', fontSize: 20, fontWeight: '700' 
+    color: '#fff', fontSize: 15, fontWeight: '700', lineHeight: 20
   },
-  bannerSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 13 },
+  bannerSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 11, marginTop: 2 },
   bannerCTA: {
-    marginTop: 8, backgroundColor: '#FF6B35',
-    paddingHorizontal: 16, paddingVertical: 8,
-    borderRadius: 8, alignSelf: 'flex-start'
+    marginTop: 6, backgroundColor: '#FF6B35',
+    paddingHorizontal: 12, paddingVertical: 5,
+    borderRadius: 6, alignSelf: 'flex-start'
   },
-  bannerCTAText: { color: '#fff', fontWeight: '600' },
+  bannerCTAText: { color: '#fff', fontWeight: '600', fontSize: 11 },
   dotsRow: {
     position: 'absolute',
-    bottom: 12,
-    right: 28,
+    bottom: 8,
+    right: 24,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
     backgroundColor: 'rgba(0,0,0,0.3)',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 10,
   },
-  dot: { height: 6, borderRadius: 3 },
-  dotActive: { backgroundColor: '#FFFFFF', width: 16 },
-  dotInactive: { backgroundColor: 'rgba(255,255,255,0.5)', width: 6 },
+  dot: { height: 5, borderRadius: 2.5 },
+  dotActive: { backgroundColor: '#FFFFFF', width: 14 },
+  dotInactive: { backgroundColor: 'rgba(255,255,255,0.5)', width: 5 },
 });
 
 const TrustBadges = () => (
@@ -1230,6 +1311,20 @@ export default function HomeScreen() {
   const [activeTab, setActiveTab] = useState('ALL');
   const [selectedCategory, setSelectedCategory] = useState('all');
 
+  const tabFadeOpacity = useSharedValue(1);
+  const animatedTabStyle = useAnimatedStyle(() => ({
+    opacity: tabFadeOpacity.value,
+  }));
+
+  const handleTabChange = (newTab: string) => {
+    if (newTab === activeTab) return;
+    tabFadeOpacity.value = withTiming(0, { duration: 120 });
+    setTimeout(() => {
+      setActiveTab(newTab);
+      tabFadeOpacity.value = withTiming(1, { duration: 250 });
+    }, 120);
+  };
+
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
   const profileLoading = useSelector((state: RootState) => state.profile.isLoading);
   const profile = useSelector((state: RootState) => state.profile.profile);
@@ -1285,15 +1380,15 @@ export default function HomeScreen() {
 
   const headerHeight = promoOffers.length > 0
     ? scrollY.interpolate({
-        inputRange: [0, 170],
-        outputRange: [330, 160],
+        inputRange: [0, BANNER_HEIGHT],
+        outputRange: [TOTAL_HEADER_HEIGHT, 160],
         extrapolate: 'clamp'
       })
     : 160;
 
   const headerBackgroundColor = promoOffers.length >= 2
     ? scrollX.interpolate({
-        inputRange: promoOffers.map((_, index) => index * ITEM_WIDTH),
+        inputRange: promoOffers.map((_, index) => index * SCREEN_WIDTH),
         outputRange: promoOffers.map(offer => offer.bgColor || '#008B45'),
         extrapolate: 'clamp',
       })
@@ -1322,7 +1417,7 @@ export default function HomeScreen() {
 
   const handleScrollEnd = (e: any) => {
     const offset = e.nativeEvent.contentOffset.x;
-    const index = Math.round(offset / ITEM_WIDTH);
+    const index = Math.round(offset / SCREEN_WIDTH);
     activeIndexRef.current = index;
   };
 
@@ -1534,7 +1629,10 @@ export default function HomeScreen() {
                   <View className="flex-row items-center">
                     <Text className="text-xs font-bold text-yellow-600">⭐ {shop.rating || '4.0'}</Text>
                     <Text className="mx-2 text-zinc-300">•</Text>
-                    <Text className="text-xs text-zinc-500"><HugeIcon icon={Location01Icon} size={16} /> {shop.distance || '0.5 km'}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <HugeIcon icon={Location01Icon} size={14} color="#71717A" />
+                      <Text style={{ fontSize: 12, color: '#71717A', marginLeft: 3 }}>{shop.distance || '0.5 km'}</Text>
+                    </View>
                   </View>
                 </View>
               </TouchableOpacity>
@@ -1546,7 +1644,6 @@ export default function HomeScreen() {
 
     if (activeTab === 'ALL' && selectedCategory === 'all') {
       const activeSections = getHomepageSections();
-      
 
       return (
         <View className="pt-4 pb-20">
@@ -1560,15 +1657,15 @@ export default function HomeScreen() {
                   <View key={uniqueKey} style={{
                     marginHorizontal: 16,
                     marginVertical: 12,
-                    height: 220,
+                    height: 145,
                     backgroundColor: '#008B45',
-                    borderRadius: 16,
+                    borderRadius: 14,
                     justifyContent: 'center',
                     alignItems: 'center',
                     overflow: 'hidden'
                   }}>
                     <Text style={{ color: '#fff', fontSize: 20, fontWeight: '700' }}>
-                      🛍️ Jhat-Pat Sale
+                      🛍️ BazarPeth Sale
                     </Text>
                     <Text style={{ color: 'rgba(255,255,255,0.8)', marginTop: 8 }}>
                       Best deals in your neighborhood
@@ -1597,7 +1694,10 @@ export default function HomeScreen() {
               case 'local_shops':
                 return localShops.length > 0 ? (
                   <View key={uniqueKey} className="mb-6">
-                    <Text className="text-xl font-black text-[#1C1C1C] px-5 mb-3">Shops Near You <HugeIcon icon={Location01Icon} size={16} /></Text>
+                    <View className="flex-row items-center px-5 mb-3">
+                      <Text className="text-xl font-black text-[#1C1C1C] mr-2">Shops Near You</Text>
+                      <HugeIcon icon={Location01Icon} size={18} />
+                    </View>
                     {localShops.slice(0, 3).map(shop => (
                       <TouchableOpacity key={shop.id} className="bg-white p-4 rounded-xl border border-zinc-150 mb-3 flex-row mx-5">
                         <Image source={{ uri: shop.image || shop.imageUrl || 'https://via.placeholder.com/150' }} className="w-16 h-16 rounded-lg mr-4 bg-zinc-100" />
@@ -1607,7 +1707,10 @@ export default function HomeScreen() {
                           <View className="flex-row items-center">
                             <Text className="text-xs font-bold text-yellow-600">⭐ {shop.rating || '4.0'}</Text>
                             <Text className="mx-2 text-zinc-300">•</Text>
-                            <Text className="text-xs text-zinc-500"><HugeIcon icon={Location01Icon} size={16} /> {shop.distance || '0.5 km'}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                              <HugeIcon icon={Location01Icon} size={14} color="#71717A" />
+                              <Text style={{ fontSize: 12, color: '#71717A', marginLeft: 3 }}>{shop.distance || '0.5 km'}</Text>
+                            </View>
                           </View>
                         </View>
                       </TouchableOpacity>
@@ -1623,7 +1726,7 @@ export default function HomeScreen() {
                     <View className="px-5 flex-row justify-between">
                       {products.length === 0 ? (
                          <Text className="text-zinc-500 w-full text-center py-10">No products found</Text>
-                      ) : (
+                       ) : (
                          <>
                            <View style={{ width: '48%' }}>
                              {products.filter((_, i) => i % 2 === 0).map(p => <ProductCard key={p.id} product={p} />)}
@@ -1632,7 +1735,7 @@ export default function HomeScreen() {
                              {products.filter((_, i) => i % 2 !== 0).map(p => <ProductCard key={p.id} product={p} />)}
                            </View>
                          </>
-                      )}
+                       )}
                     </View>
                   </View>
                 );
@@ -1644,25 +1747,262 @@ export default function HomeScreen() {
       );
     }
 
-    // Default Grid for filtered/tabbed products
+    // ── SWIGGY-INSTAMART STYLE DYNAMIC TAB CONTENT ──
+    const theme = TAB_THEMES[activeTab] || TAB_THEMES.ALL;
+    const tabSpecificBanners = banners.filter(
+      (b: any) => b.targetTab === activeTab || b.category === activeTab || b.placement === activeTab
+    );
+
     return (
-      <View className="px-5 pt-4 pb-20 flex-row justify-between">
-        {currentTabProducts.length === 0 ? (
-          <View className="w-full items-center justify-center py-10">
-            <Text className="text-2xl mb-2">😕</Text>
-            <Text className="text-lg font-black text-zinc-800 mb-1">No products found</Text>
-            <Text className="text-zinc-500">Check Firebase connection or add products</Text>
+      <View style={{ paddingTop: 0, paddingBottom: 80, backgroundColor: '#FAFAFA' }}>
+        {/* ── CONTINUOUS THEME BACKGROUND SECTION (Wraps Hero Banner + Sub-Category Promo Tiles) ── */}
+        <LinearGradient
+          colors={theme.gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            paddingTop: 16,
+            paddingBottom: 24,
+            borderBottomLeftRadius: 28,
+            borderBottomRightRadius: 28,
+            marginBottom: 20,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.1,
+            shadowRadius: 10,
+            elevation: 4,
+          }}
+        >
+          {/* 1. Hero Banner */}
+          <View style={{ paddingHorizontal: 16, marginBottom: 18 }}>
+            {tabSpecificBanners.length > 0 ? (
+              <BannerCarousel banners={tabSpecificBanners} />
+            ) : (
+              <View
+                style={{
+                  width: '100%',
+                  borderRadius: 18,
+                  padding: 18,
+                  backgroundColor: 'rgba(255,255,255,0.15)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.25)',
+                  overflow: 'hidden',
+                  position: 'relative',
+                }}
+              >
+                <View style={{ width: '65%', zIndex: 2 }}>
+                  <View style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, alignSelf: 'flex-start', marginBottom: 8 }}>
+                    <Text style={{ color: theme.accent, fontSize: 10, fontFamily: 'Poppins_700Bold' }}>
+                      {theme.bannerBadgeText}
+                    </Text>
+                  </View>
+                  <Text style={{ color: '#FFFFFF', fontSize: 18, fontFamily: 'Poppins_700Bold', lineHeight: 24, marginBottom: 4 }}>
+                    {theme.defaultBannerTitle}
+                  </Text>
+                  <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 11, fontFamily: 'Poppins_500Medium', marginBottom: 14 }}>
+                    {theme.defaultBannerSub}
+                  </Text>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, alignSelf: 'flex-start' }}
+                    onPress={() => setSelectedCategory('all')}
+                  >
+                    <Text style={{ color: theme.accent, fontSize: 11, fontFamily: 'Poppins_700Bold' }}>
+                      Shop Now →
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <Image
+                  source={{ uri: theme.defaultBannerImage }}
+                  style={{
+                    position: 'absolute',
+                    right: -10,
+                    bottom: -10,
+                    width: 140,
+                    height: 140,
+                    borderRadius: 14,
+                    opacity: 0.9,
+                  }}
+                  resizeMode="cover"
+                />
+              </View>
+            )}
           </View>
-        ) : (
-          <>
-            <View style={{ width: '48%' }}>
-              {currentTabProducts.filter((_, i) => i % 2 === 0).map(p => <ProductCard key={p.id} product={p} />)}
+
+          {/* 2. Sub-Category Promotional Discount Tiles (Swiggy Instamart Style) */}
+          {theme.subCategories.length > 0 && (
+            <View>
+              <View style={{ paddingHorizontal: 16, marginBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: 16, fontFamily: 'Poppins_700Bold', color: '#FFFFFF' }}>
+                  Explore {theme.label} Categories
+                </Text>
+                <Text style={{ fontSize: 11, fontFamily: 'Poppins_600SemiBold', color: 'rgba(255,255,255,0.85)' }}>
+                  {theme.subCategories.length} Categories
+                </Text>
+              </View>
+
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}>
+                {theme.subCategories.map((sub) => {
+                  // Calculate REAL discount percentage from products matching this subcategory
+                  const subProds = products.filter(p => {
+                    const cat = (p.category || '').toLowerCase();
+                    const subcat = (p.subcategory || '').toLowerCase();
+                    const pName = (p.name || '').toLowerCase();
+                    const target = sub.id.toLowerCase();
+                    const targetName = sub.name.toLowerCase();
+                    return cat.includes(target) || subcat.includes(target) || pName.includes(targetName);
+                  });
+
+                  let maxDiscount = 0;
+                  subProds.forEach(p => {
+                    if (p.originalPrice && p.originalPrice > p.price) {
+                      const disc = Math.round(((p.originalPrice - p.price) / p.originalPrice) * 100);
+                      if (disc > maxDiscount) maxDiscount = disc;
+                    }
+                  });
+
+                  return (
+                    <TouchableOpacity
+                      key={sub.id}
+                      activeOpacity={0.9}
+                      onPress={() => {
+                        const matchedProd = subProds[0];
+                        if (matchedProd) {
+                          navigation.navigate('ProductDetail', { productId: matchedProd.id });
+                        }
+                      }}
+                      style={{
+                        width: 108,
+                        height: 135,
+                        borderRadius: 16,
+                        backgroundColor: '#FFFFFF',
+                        overflow: 'hidden',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.15,
+                        shadowRadius: 4,
+                        elevation: 3,
+                        position: 'relative',
+                      }}
+                    >
+                      {/* REAL Discount Badge Overlay (only shown if real discount exists in products) */}
+                      {maxDiscount > 0 && (
+                        <View style={{
+                          position: 'absolute',
+                          top: 6,
+                          left: 6,
+                          backgroundColor: '#DC2626',
+                          paddingHorizontal: 6,
+                          paddingVertical: 2,
+                          borderRadius: 6,
+                          zIndex: 3,
+                        }}>
+                          <Text style={{ color: '#FFFFFF', fontSize: 9, fontFamily: 'Poppins_700Bold' }}>
+                            UP TO {maxDiscount}% OFF
+                          </Text>
+                        </View>
+                      )}
+
+                      {/* Tile Product Image */}
+                      <View style={{ width: '100%', height: 88, backgroundColor: '#F8FAFC' }}>
+                        <Image
+                          source={{ uri: sub.img }}
+                          style={{ width: '100%', height: '100%' }}
+                          resizeMode="cover"
+                        />
+                      </View>
+
+                      {/* Tile Label */}
+                      <View style={{ paddingHorizontal: 6, paddingVertical: 6, justifyContent: 'center', alignItems: 'center', height: 47, backgroundColor: '#FFFFFF' }}>
+                        <Text style={{ fontSize: 11, fontFamily: 'Poppins_700Bold', color: '#1E293B', textAlign: 'center', lineHeight: 14 }} numberOfLines={2}>
+                          {sub.name}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             </View>
-            <View style={{ width: '48%' }}>
-              {currentTabProducts.filter((_, i) => i % 2 !== 0).map(p => <ProductCard key={p.id} product={p} />)}
+          )}
+        </LinearGradient>
+
+        {/* ── 3. OFFERS CURATED FOR YOU SECTION ── */}
+        {currentTabProducts.length > 0 && (
+          <View style={{ marginBottom: 24 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ fontSize: 18, fontFamily: 'Poppins_700Bold', color: '#0F172A', marginRight: 8 }}>
+                  Offers Curated For You
+                </Text>
+                <View style={{ backgroundColor: theme.accent, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 10, fontFamily: 'Poppins_700Bold' }}>DEALS</Text>
+                </View>
+              </View>
             </View>
-          </>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}>
+              {currentTabProducts.slice(0, 6).map(p => (
+                <View key={`curated_${p.id}`} style={{ width: 160 }}>
+                  <ProductCard product={{ ...p, distance: '0.5 km' }} />
+                </View>
+              ))}
+            </ScrollView>
+          </View>
         )}
+
+        {/* ── 4. ALL TAB COLLECTION MASONRY GRID OR EMPTY STATE ── */}
+        <View style={{ paddingHorizontal: 16 }}>
+          <Text style={{ fontSize: 16, fontFamily: 'Poppins_700Bold', color: '#0F172A', marginBottom: 12 }}>
+            All {theme.label} Collection ({currentTabProducts.length})
+          </Text>
+
+          {currentTabProducts.length === 0 ? (
+            <View style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: 20,
+              padding: 28,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.05,
+              shadowRadius: 6,
+              elevation: 2,
+              marginVertical: 12,
+            }}>
+              <Text style={{ fontSize: 48, marginBottom: 12 }}>{theme.emptyEmoji}</Text>
+              <Text style={{ fontSize: 16, fontFamily: 'Poppins_700Bold', color: '#1E293B', textAlign: 'center', marginBottom: 6 }}>
+                {theme.emptyStateTitle}
+              </Text>
+              <Text style={{ fontSize: 12, fontFamily: 'Poppins_500Medium', color: '#64748B', textAlign: 'center', marginBottom: 18, lineHeight: 18 }}>
+                {theme.emptyStateSub}
+              </Text>
+              <TouchableOpacity
+                onPress={() => handleTabChange('ALL')}
+                style={{
+                  backgroundColor: theme.accent,
+                  paddingHorizontal: 20,
+                  paddingVertical: 10,
+                  borderRadius: 25,
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontFamily: 'Poppins_700Bold', fontSize: 12 }}>
+                  Browse All Products →
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <View style={{ width: '48%' }}>
+                {currentTabProducts.filter((_, i) => i % 2 === 0).map(p => <ProductCard key={p.id} product={p} />)}
+              </View>
+              <View style={{ width: '48%' }}>
+                {currentTabProducts.filter((_, i) => i % 2 !== 0).map(p => <ProductCard key={p.id} product={p} />)}
+              </View>
+            </View>
+          )}
+        </View>
       </View>
     );
   };
@@ -1691,11 +2031,10 @@ export default function HomeScreen() {
         overflow: 'hidden',
         zIndex: 10,
       }}>
-        {/* Dynamic Background Render */}
-        {heroAd?.bgType === 'video' && heroAd?.bgUrl && (
+        {heroAd?.bgType === 'video' && heroAd?.bgUrl ? (
           <HeroVideoBackground source={heroAd.bgUrl} />
-        )}
-        {heroAd?.bgType === 'lottie' && heroAd?.bgUrl && (
+        ) : null}
+        {heroAd?.bgType === 'lottie' && heroAd?.bgUrl ? (
           <LottieView
             source={{ uri: heroAd.bgUrl }}
             autoPlay
@@ -1703,21 +2042,20 @@ export default function HomeScreen() {
             resizeMode="cover"
             style={StyleSheet.absoluteFill}
           />
-        )}
-        {heroAd?.bgType === 'animated_gradient' && heroAd?.bgColors && (
-          <AnimatedGradientBackground colors={heroAd.bgColors} />
-        )}
-        
-        {/* Fallback solid background if no ad */}
-        {!heroAd?.bgType && (
-           <View style={[StyleSheet.absoluteFill, { backgroundColor: headerBackgroundColor }]} />
-        )}
+        ) : null}
+        {heroAd?.bgType === 'animated_gradient' && (heroAd?.gradientColors || heroAd?.bgColors) ? (
+          <AnimatedGradientBackground colors={heroAd.gradientColors || heroAd.bgColors} />
+        ) : null}
+        {!heroAd?.bgType ? (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: headerBackgroundColor }]} />
+        ) : null}
 
         <SafeAreaView edges={['top']} style={{ flex: 1 }}>
-          <View style={{ paddingHorizontal: 12, flex: 1 }}>
+          {/* Static Top Controls (Location & Search Bar) with 12px Horizontal Padding */}
+          <View style={{ paddingHorizontal: 12 }}>
             {/* ── STATIC HEADER CONTENT (Location & Search Bar) ── */}
             {/* Location & Rewards Row */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, marginTop: 8 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, marginTop: 4 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
                 <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 6, borderRadius: 20, marginRight: 8 }}>
                   <HugeIcon icon={Home02Icon} size={16} color="#FFFFFF" />
@@ -1741,7 +2079,7 @@ export default function HomeScreen() {
             </View>
 
             {/* Unified Search & Smart Bar Scanner */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 12 }}>
               <TouchableOpacity 
                 activeOpacity={0.9}
                 onPress={() => navigation.navigate('Search')}
@@ -1765,14 +2103,16 @@ export default function HomeScreen() {
                 <HugeIcon icon={QrCodeIcon} size={20} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
+          </View>
 
-            {/* ── PROMOTIONAL BANNER CAROUSEL (fades out and slides up) ── */}
-            <Animated.View style={{
-              opacity: scrollY.interpolate({ inputRange: [0, 80], outputRange: [1, 0], extrapolate: 'clamp' }),
-              transform: [{
-                translateY: scrollY.interpolate({ inputRange: [0, 100], outputRange: [0, -20], extrapolate: 'clamp' })
-              }],
-            }}>
+          {/* ── PROMOTIONAL BANNER CAROUSEL (Full Width Edge-to-Edge with Zero Padding Gaps) ── */}
+          <Animated.View style={{
+            flex: 1,
+            opacity: scrollY.interpolate({ inputRange: [0, 80], outputRange: [1, 0], extrapolate: 'clamp' }),
+            transform: [{
+              translateY: scrollY.interpolate({ inputRange: [0, 100], outputRange: [0, -20], extrapolate: 'clamp' })
+            }],
+          }}>
               <Animated.FlatList
                 ref={flatListRef}
                 data={promoOffers}
@@ -1785,70 +2125,165 @@ export default function HomeScreen() {
                 scrollEventThrottle={16}
                 onMomentumScrollEnd={handleScrollEnd}
                 getItemLayout={(data, index) => (
-                  { length: ITEM_WIDTH, offset: ITEM_WIDTH * index, index }
+                  { length: SCREEN_WIDTH, offset: SCREEN_WIDTH * index, index }
                 )}
-                renderItem={({ item }) => (
-                  <View style={{
-                    width: ITEM_WIDTH,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    paddingVertical: 14,
-                    paddingHorizontal: 4,
-                  }}>
-                    <View style={{ flex: 1, paddingRight: 12 }}>
-                      {item.badge && (
-                        <View style={{
-                          backgroundColor: '#FFD700',
-                          paddingHorizontal: 8,
-                          paddingVertical: 3,
-                          borderRadius: 6,
-                          alignSelf: 'flex-start',
-                          marginBottom: 6,
-                        }}>
-                          <Text style={{ color: '#008B45', fontSize: 10, fontFamily: 'Poppins_800ExtraBold', letterSpacing: 1 }}>{item.badge}</Text>
-                        </View>
-                      )}
-                      <Text style={{ color: '#FFFFFF', fontSize: 22, fontFamily: 'Poppins_800ExtraBold', marginBottom: 3 }} numberOfLines={1}>
-                        {item.title}
-                      </Text>
-                      <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 13, fontFamily: 'Poppins_300Light', marginBottom: 12 }} numberOfLines={1}>
-                        {item.desc || item.subtitle || 'Shop our latest deals!'}
-                      </Text>
-                      <TouchableOpacity style={{
-                        backgroundColor: '#FFD700',
-                        paddingHorizontal: 16,
-                        paddingVertical: 8,
-                        borderRadius: 20,
-                        alignSelf: 'flex-start',
-                        flexDirection: 'row',
-                        alignItems: 'center'
+                renderItem={({ item }) => {
+                  const bannerImage = item.imageUrl || item.image;
+
+                  const handleBannerPress = () => {
+                    if (item.categoryId) {
+                      navigation.navigate('CategoryProducts', { categoryId: item.categoryId, categoryName: item.title || 'Category' });
+                    } else if (item.productId) {
+                      navigation.navigate('ProductDetail', { productId: item.productId });
+                    } else if (item.link) {
+                      navigation.navigate('Search', { query: item.link });
+                    }
+                  };
+
+                  if (bannerImage) {
+                    return (
+                      <View style={{
+                        width: SCREEN_WIDTH,
+                        height: BANNER_HEIGHT,
+                        justifyContent: 'center',
+                        alignItems: 'center',
                       }}>
-                        <Text style={{ color: '#008B45', fontFamily: 'Poppins_700Bold', fontSize: 13 }}>{item.ctaText || 'Shop Now'}</Text>
-                      </TouchableOpacity>
-                    </View>
-                    <View style={{
-                      width: 80, height: 80,
-                      justifyContent: 'center',
+                        <TouchableOpacity
+                          activeOpacity={0.9}
+                          onPress={handleBannerPress}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            overflow: 'hidden',
+                            backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                            position: 'relative',
+                          }}
+                        >
+                          {/* Container-level media wrapper: Clips static images, WebP animations, GIFs, videos, or Lottie edge-to-edge */}
+                          <View style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
+                            <SafeImage
+                              uri={bannerImage}
+                              style={{ width: '100%', height: '100%' }}
+                              resizeMode="cover"
+                            />
+                          </View>
+
+                          {/* Render title overlay only if title is provided and not generic default */}
+                          {(item.title && item.title !== 'Banner' && item.showTextOverlay === true) && (
+                            <LinearGradient
+                              colors={['transparent', 'rgba(0,0,0,0.65)']}
+                              style={{
+                                position: 'absolute',
+                                left: 0, right: 0, bottom: 0,
+                                padding: 12,
+                                borderRadius: 16,
+                                flexDirection: 'row',
+                                alignItems: 'flex-end',
+                                justifyContent: 'space-between',
+                              }}
+                            >
+                              <View style={{ flex: 1, paddingRight: 8 }}>
+                                {item.badge && (
+                                  <View style={{
+                                    backgroundColor: '#FFD700',
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 2,
+                                    borderRadius: 4,
+                                    alignSelf: 'flex-start',
+                                    marginBottom: 4,
+                                  }}>
+                                    <Text style={{ color: '#008B45', fontSize: 9, fontFamily: 'Poppins_800ExtraBold', letterSpacing: 0.5 }}>
+                                      {item.badge}
+                                    </Text>
+                                  </View>
+                                )}
+                                <Text style={{ color: '#FFFFFF', fontSize: 16, fontFamily: 'Poppins_700Bold' }} numberOfLines={1}>
+                                  {item.title}
+                                </Text>
+                                {(item.desc || item.subtitle) && (
+                                  <Text style={{ color: 'rgba(255, 255, 255, 0.85)', fontSize: 11, fontFamily: 'Poppins_400Regular' }} numberOfLines={1}>
+                                    {item.desc || item.subtitle}
+                                  </Text>
+                                )}
+                              </View>
+                              {item.ctaText && (
+                                <View style={{
+                                  backgroundColor: '#FFD700',
+                                  paddingHorizontal: 12,
+                                  paddingVertical: 6,
+                                  borderRadius: 16,
+                                }}>
+                                  <Text style={{ color: '#008B45', fontFamily: 'Poppins_700Bold', fontSize: 11 }}>
+                                    {item.ctaText}
+                                  </Text>
+                                </View>
+                              )}
+                            </LinearGradient>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  }
+
+                  // Fallback for text-only offers without an image
+                  return (
+                    <Animated.View style={{
+                      width: SCREEN_WIDTH,
+                      height: BANNER_HEIGHT,
+                      flexDirection: 'row',
                       alignItems: 'center',
-                      borderRadius: 12,
-                      overflow: 'hidden',
-                      backgroundColor: 'rgba(255,255,255,0.1)'
+                      paddingHorizontal: 16,
+                      backgroundColor: item.bgColor || headerBackgroundColor,
                     }}>
-                      {item.imageUrl ? (
-                        <SafeImage
-                          uri={item.imageUrl}
-                          style={{ width: '100%', height: '100%' }}
-                          resizeMode="cover"
-                        />
-                      ) : (
+                      <View style={{ flex: 1, paddingRight: 12 }}>
+                        {item.badge && (
+                          <View style={{
+                            backgroundColor: '#FFD700',
+                            paddingHorizontal: 8,
+                            paddingVertical: 3,
+                            borderRadius: 6,
+                            alignSelf: 'flex-start',
+                            marginBottom: 6,
+                          }}>
+                            <Text style={{ color: '#008B45', fontSize: 10, fontFamily: 'Poppins_800ExtraBold', letterSpacing: 1 }}>{item.badge}</Text>
+                          </View>
+                        )}
+                        <Text style={{ color: '#FFFFFF', fontSize: 22, fontFamily: 'Poppins_800ExtraBold', marginBottom: 3 }} numberOfLines={1}>
+                          {item.title}
+                        </Text>
+                        <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 13, fontFamily: 'Poppins_300Light', marginBottom: 12 }} numberOfLines={1}>
+                          {item.desc || item.subtitle || 'Shop our latest deals!'}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={handleBannerPress}
+                          style={{
+                            backgroundColor: '#FFD700',
+                            paddingHorizontal: 16,
+                            paddingVertical: 8,
+                            borderRadius: 20,
+                            alignSelf: 'flex-start',
+                            flexDirection: 'row',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <Text style={{ color: '#008B45', fontFamily: 'Poppins_700Bold', fontSize: 13 }}>{item.ctaText || 'Shop Now'}</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <View style={{
+                        width: 80, height: 80,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        borderRadius: 12,
+                        overflow: 'hidden',
+                        backgroundColor: 'rgba(255,255,255,0.1)'
+                      }}>
                         <Text style={{ fontSize: 60 }}>{item.icon || '🎉'}</Text>
-                      )}
-                    </View>
-                  </View>
-                )}
+                      </View>
+                    </Animated.View>
+                  );
+                }}
               />
             </Animated.View>
-          </View>
         </SafeAreaView>
       </Animated.View>
 
@@ -1861,7 +2296,7 @@ export default function HomeScreen() {
           scrollEventThrottle={16}
         >
           {/* Spacer to align content below expanded header */}
-          <View style={{ height: promoOffers.length > 0 ? 170 : 0 }} />
+          <View style={{ height: promoOffers.length > 0 ? (TOTAL_HEADER_HEIGHT - 160) : 0 }} />
           {/* ── CATEGORY ICONS ── */}
           <View className="bg-white">
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: 16, marginTop: 16, paddingBottom: 8 }}>
@@ -1875,10 +2310,12 @@ export default function HomeScreen() {
               ))}
             </ScrollView>
           </View>
-          <View className="bg-white">
-            <HomeTabBar activeTab={activeTab} onTabChange={setActiveTab} />
+          <View style={{ backgroundColor: '#111827' }}>
+            <HomeTabBar activeTab={activeTab} onTabChange={handleTabChange} accentColor={TAB_THEMES[activeTab]?.accent} />
           </View>
-          {renderActiveTabContent()}
+          <Reanimated.View style={[{ flex: 1 }, animatedTabStyle]}>
+            {renderActiveTabContent()}
+          </Reanimated.View>
         </Animated.ScrollView>
       </View>
     </View>

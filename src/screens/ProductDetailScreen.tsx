@@ -962,8 +962,10 @@ export default function ProductDetailScreen() {
           </TouchableOpacity>
           <TouchableOpacity 
             onPress={() => {
-              dispatch(toggleWishlist(productId));
-              if (product) toggleWishlistItem(uid, product);
+              if (productId) {
+                dispatch(toggleWishlist(productId));
+                if (product && uid) toggleWishlistItem(uid, product);
+              }
             }} 
             style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.85)', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 5 }}
           >
@@ -1092,7 +1094,7 @@ export default function ProductDetailScreen() {
           <Text style={{ fontSize: 18, fontWeight: '800', color: '#1C1C1C', marginBottom: 16 }}>Highlights</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 32 }}>
             {[
-              { label: 'Brand', value: product.brand || product.vendor || 'Jhat-Pat' },
+              { label: 'Brand', value: product.brand || product.vendor || 'BazarPeth' },
               { label: 'Delivery', value: '10 - 20 Mins' },
               { label: 'Return Policy', value: '7 Days Easy Return' },
               { label: 'Quality', value: '100% Authentic' }
@@ -1107,7 +1109,7 @@ export default function ProductDetailScreen() {
           {/* Description (Expandable look) */}
           <Text style={{ fontSize: 18, fontWeight: '800', color: '#1C1C1C', marginBottom: 12 }}>Product Details</Text>
           <Text style={{ fontSize: 15, color: '#3F3F46', lineHeight: 24, marginBottom: 32 }}>
-            {product.description || 'Premium quality product brought to you by Jhat-Pat. Enjoy 20-minute local delivery and unparalleled service. This is a mix of highly efficient service and amazing product quality that stands out in the market.'}
+            {product.description || 'Premium quality product brought to you by BazarPeth. Enjoy 20-minute local delivery and unparalleled service. This is a mix of highly efficient service and amazing product quality that stands out in the market.'}
           </Text>
 
           {/* MODERN RATINGS & REVIEWS */}

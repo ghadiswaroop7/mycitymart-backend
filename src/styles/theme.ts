@@ -1,6 +1,6 @@
 /**
  * Design System Tokens — Auth Screens
- * Extracted from the Jhat-Pat design specification.
+ * Extracted from the BazarPeth design specification.
  */
 
 export const COLORS = {

@@ -12,7 +12,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 const FAQS = [
   { question: 'Where is my order?', answer: 'You can track your order status in real-time from the "My Orders" or "Live Delivery" section on the Profile page.' },
   { question: 'How to cancel an order?', answer: 'Orders can only be cancelled before they are confirmed by the seller. Go to My Orders, select the order, and tap Cancel.' },
-  { question: 'Refund policy', answer: 'Refunds for cancelled orders are processed immediately to your Jhat-Pat wallet, or within 3-5 days to your original payment method.' },
+  { question: 'Refund policy', answer: 'Refunds for cancelled orders are processed immediately to your BazarPeth wallet, or within 3-5 days to your original payment method.' },
   { question: 'Payment issues', answer: 'If money was deducted but the order failed, it will be automatically refunded within 24 hours. Contact support for immediate help.' },
 ];
 
@@ -56,7 +56,7 @@ export default function HelpSupportScreen() {
             </View>
             <View>
               <Text className="font-bold text-[#1C1C1C]">Email Us</Text>
-              <Text className="text-zinc-500 text-xs">support@jhatpat.in</Text>
+              <Text className="text-zinc-500 text-xs">support@bazarpeth.com</Text>
             </View>
           </View>
         </View>

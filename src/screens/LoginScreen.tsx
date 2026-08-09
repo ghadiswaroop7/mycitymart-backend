@@ -30,6 +30,7 @@ import {
 import { app, auth, db } from '../config/firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import FirebaseRecaptchaVerifierModal from '../components/FirebaseRecaptchaVerifierModal';
+import ForgotPasswordModal from '../components/ForgotPasswordModal';
 import { HugeIcon } from '../components/HugeIcon';
 import {
   ArrowLeft01Icon,
@@ -73,6 +74,7 @@ const LoginScreen = ({ navigation }: any) => {
   const [otp, setOtp] = useState('');
   const [verificationId, setVerificationId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [forgotModalVisible, setForgotModalVisible] = useState(false);
 
   const recaptchaVerifier = useRef<any>(null);
   const dispatch = useDispatch();
@@ -163,17 +165,8 @@ const LoginScreen = ({ navigation }: any) => {
   };
 
   // ── Forgot Password ──
-  const handleForgotPassword = async () => {
-    if (!email.trim()) {
-      Alert.alert('Enter Email', 'Please type your email above first, then tap Forgot Password.');
-      return;
-    }
-    try {
-      await sendPasswordResetEmail(auth, email.trim());
-      Alert.alert('Email Sent ✅', 'Check your inbox for a password reset link.');
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
-    }
+  const handleForgotPassword = () => {
+    setForgotModalVisible(true);
   };
 
   // ── OTP: Send ──
@@ -423,6 +416,12 @@ const LoginScreen = ({ navigation }: any) => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <ForgotPasswordModal
+        visible={forgotModalVisible}
+        onClose={() => setForgotModalVisible(false)}
+        initialEmail={email}
+      />
     </SafeAreaView>
   );
 };

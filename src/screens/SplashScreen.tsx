@@ -29,7 +29,7 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationFinish }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E8A3C', // JHAT-PAT green
+    backgroundColor: '#1E8A3C', // BazarPeth green
     alignItems: 'center',
     justifyContent: 'center',
   },

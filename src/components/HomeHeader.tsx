@@ -9,7 +9,7 @@ export default function HomeHeader() {
       {/* Tier 1: Top Brand Hub */}
       <View className="flex-row justify-between items-center mb-5">
         <TouchableOpacity className="bg-yellow-400 rounded-2xl px-4 py-1.5 border-2 border-yellow-500 shadow-sm">
-          <Text className="text-[#1C1C1C] font-extrabold text-xs">Jhat-Pat</Text>
+          <Text className="text-[#1C1C1C] font-extrabold text-xs">BazarPeth</Text>
         </TouchableOpacity>
         <TouchableOpacity className="bg-white rounded-2xl px-4 py-1.5 shadow-sm">
           <Text className="text-[#1C1C1C] font-bold text-xs">Minutes</Text>

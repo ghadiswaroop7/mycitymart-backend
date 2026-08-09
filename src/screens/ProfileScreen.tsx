@@ -232,7 +232,7 @@ export default function ProfileScreen() {
         {/* ─── OFFERS & WALLET ─── 
         <Text className="text-[12px] text-[#757575] font-bold uppercase tracking-wider mb-2 ml-1">Offers & Wallet</Text>
         <View className="bg-white rounded-xl shadow-sm border border-gray-100 mb-5 overflow-hidden">
-          <MenuItem icon={<HugeIcon icon={WalletIcon} size={20} color="#9C27B0" />} label="Jhat-Pat Wallet" subLabel="Balance: ₹150" />
+          <MenuItem icon={<HugeIcon icon={WalletIcon} size={20} color="#9C27B0" />} label="BazarPeth Wallet" subLabel="Balance: ₹150" />
           <Divider />
           <MenuItem icon={<HugeIcon icon={GiftIcon} size={20} color="#FF5252" />} label="Referral & Rewards" />
           <Divider />

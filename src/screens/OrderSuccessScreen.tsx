@@ -42,7 +42,7 @@ export default function OrderSuccessScreen() {
         <Animated.View style={{ opacity: opacityValue, alignItems: 'center', width: '100%' }}>
           <Text className="text-2xl font-black text-[#1C1C1C] text-center mb-2">Order Placed Successfully! 🎉</Text>
           <Text className="text-zinc-500 font-medium text-center text-sm mb-6">
-            Thank you for shopping with Jhat-Pat. Your order is being processed.
+            Thank you for shopping with BazarPeth. Your order is being processed.
           </Text>
 
           <View className="bg-zinc-50 border border-zinc-200 px-6 py-3 rounded-xl mb-10 w-full flex-row justify-between items-center">

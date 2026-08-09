@@ -9,14 +9,14 @@ import RootNavigator from './src/navigation/RootNavigator';
 import { AuthProvider } from './src/context/AuthContext';
 import SplashScreenComponent from './src/screens/SplashScreen';
 import * as SplashScreen from 'expo-splash-screen';
-import { 
-  useFonts, 
-  Poppins_300Light, 
-  Poppins_400Regular, 
-  Poppins_500Medium, 
-  Poppins_600SemiBold, 
-  Poppins_700Bold, 
-  Poppins_800ExtraBold 
+import {
+  useFonts,
+  Poppins_300Light,
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+  Poppins_800ExtraBold
 } from '@expo-google-fonts/poppins';
 import './global.css';
 
