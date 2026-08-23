@@ -561,3 +561,22 @@ export const subscribeToSavedShops = (uid: string, callback: (shops: any[]) => v
     callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
   });
 };
+
+// ----------------------------------------------------------------------
+// APP HOMEPAGE LAYOUT API (DYNAMIC TABS)
+// ----------------------------------------------------------------------
+export const getTabHomepageLayout = async (tab: string) => {
+  try {
+    const docId = tab.toLowerCase().trim();
+    const docRef = doc(db, 'app_homepage_layout', docId);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return { id: snap.id, ...snap.data() };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching homepage layout for tab:', tab, error);
+    return null;
+  }
+};
+

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,52 +11,119 @@ import {
   ActivityIndicator,
   Image,
   RefreshControl,
+  TextInput,
+  Linking,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { collection, query, where, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, query, onSnapshot, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useNavigation } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store';
 import { subscribeToSavedShops, toggleSavedShop } from '../services/firestoreService';
 import { HugeIcon } from '../components/HugeIcon';
-import { StarIcon, Location01Icon, StoreIcon, ReloadIcon, Search02Icon } from '@hugeicons/core-free-icons';
+import {
+  StarIcon,
+  Location01Icon,
+  StoreIcon,
+  ReloadIcon,
+  Search02Icon,
+  Cancel01Icon,
+  FlashIcon,
+  FavouriteIcon,
+  TagIcon,
+  CallIcon,
+  Tick01Icon,
+  ShoppingBag01Icon,
+  ArrowRightIcon,
+} from '@hugeicons/core-free-icons';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_GAP = 12;
 const CARD_WIDTH = (SCREEN_WIDTH - 16 * 2 - CARD_GAP) / 2;
 
-// ── Brand Colors ──
+// ── Theme & Palette ──
 const COLORS = {
+  primary: '#008B45',
+  primaryLight: '#E8F5E9',
+  primaryDark: '#006633',
   orange: '#FA8C16',
   orangeLight: '#FFF7E6',
-  orangeDark: '#D46B08',
-  warmBg: '#FFF8F0',
+  orangeBg: '#FFF8F0',
   cardBg: '#FFFFFF',
-  textPrimary: '#1C1C1C',
-  textMuted: '#71717A',
-  textSecondary: '#8C8C8C',
+  textPrimary: '#0F172A',
+  textSecondary: '#475569',
+  textMuted: '#94A3B8',
   openGreen: '#16A34A',
-  openGreenBg: '#F0FFF4',
-  closedGrey: '#9CA3AF',
-  closedGreyBg: '#F4F4F5',
-  border: '#F0F0F0',
-  skeleton: '#E5E7EB',
+  openGreenBg: '#DCFCE7',
+  closedGrey: '#94A3B8',
+  closedGreyBg: '#F1F5F9',
+  border: '#E2E8F0',
 };
 
-// ── Category Chips Data ──
+// ── Category Definitions with Assets & Themes ──
+const CATEGORY_MAP: Record<string, { label: string; emoji: string; color: string; bg: string; icon: any }> = {
+  all: { label: 'All Shops', emoji: '🛍️', color: '#008B45', bg: '#E8F5E9', icon: require('../../assets/cat_men.png') },
+  fashion: { label: 'Fashion & Clothes', emoji: '👗', color: '#EC4899', bg: '#FFF0F6', icon: require('../../assets/cat_women_western.png') },
+  clothing: { label: 'Fashion & Clothes', emoji: '👗', color: '#EC4899', bg: '#FFF0F6', icon: require('../../assets/cat_women_western.png') },
+  grocery: { label: 'Kirana & Grocery', emoji: '🛒', color: '#16A34A', bg: '#F6FFED', icon: require('../../assets/cat_grocery.png') },
+  vegetables: { label: 'Fresh Veggies', emoji: '🥬', color: '#10B981', bg: '#ECFDF5', icon: require('../../assets/cat_grocery.png') },
+  fruits: { label: 'Fresh Fruits', emoji: '🍎', color: '#EF4444', bg: '#FEF2F2', icon: require('../../assets/cat_grocery.png') },
+  footwear: { label: 'Shoes & Footwear', emoji: '👟', color: '#F59E0B', bg: '#FFF7E6', icon: require('../../assets/cat_bags_footwear.png') },
+  toys: { label: 'Kids & Toys', emoji: '🧸', color: '#8B5CF6', bg: '#F5F3FF', icon: require('../../assets/cat_kids_toys.png') },
+  electronics: { label: 'Electronics & Mobile', emoji: '📱', color: '#3B82F6', bg: '#EFF6FF', icon: require('../../assets/cat_electronics.png') },
+  bakery: { label: 'Bakery & Sweets', emoji: '🥐', color: '#D97706', bg: '#FFFBEB', icon: require('../../assets/cat_grocery.png') },
+  sweets: { label: 'Mithai & Sweets', emoji: '🍬', color: '#F97316', bg: '#FFF7ED', icon: require('../../assets/cat_grocery.png') },
+  dairy: { label: 'Dairy & Milk', emoji: '🥛', color: '#0284C7', bg: '#F0F9FF', icon: require('../../assets/cat_grocery.png') },
+  pharmacy: { label: 'Medical & Health', emoji: '💊', color: '#059669', bg: '#ECFDF5', icon: require('../../assets/cat_beauty_health.png') },
+  pet: { label: 'Pet Care', emoji: '🐾', color: '#6366F1', bg: '#EEF2FF', icon: require('../../assets/cat_pet_supplies.png') },
+};
+
 const CATEGORY_FILTERS = [
-  { id: 'all', label: 'All', emoji: '🛍️' },
-  { id: 'grocery', label: 'Grocery', emoji: '🛒' },
-  { id: 'vegetables', label: 'Vegetables', emoji: '🥬' },
-  { id: 'fruits', label: 'Fruits', emoji: '🍎' },
-  { id: 'clothing', label: 'Clothing', emoji: '👗' },
-  { id: 'bakery', label: 'Bakery', emoji: '🍞' },
-  { id: 'dairy', label: 'Dairy', emoji: '🥛' },
-  { id: 'pharmacy', label: 'Pharmacy', emoji: '💊' },
-  { id: 'electronics', label: 'Electronics', emoji: '📱' },
-  { id: 'sweets', label: 'Sweets', emoji: '🍬' },
+  { id: 'all', label: 'All Shops', emoji: '🛍️' },
+  { id: 'fashion', label: 'Fashion & Boutique', emoji: '👗' },
+  { id: 'grocery', label: 'Kirana & Grocery', emoji: '🛒' },
+  { id: 'electronics', label: 'Electronics & Mobile', emoji: '📱' },
+  { id: 'footwear', label: 'Footwear', emoji: '👟' },
+  { id: 'toys', label: 'Kids & Toys', emoji: '🧸' },
+  { id: 'bakery', label: 'Bakery & Sweets', emoji: '🍬' },
+  { id: 'pharmacy', label: 'Medical Store', emoji: '💊' },
+  { id: 'vegetables', label: 'Veggies & Fruits', emoji: '🥬' },
 ];
+
+// Helper to get category aesthetic
+const getShopAesthetic = (shop: any) => {
+  const cat = (shop.category || '').toLowerCase();
+  const name = (shop.shopName || shop.name || '').toLowerCase();
+  const text = `${cat} ${name}`;
+
+  if (text.includes('fashion') || text.includes('cloth') || text.includes('boutique') || text.includes('trend') || text.includes('saree')) {
+    return CATEGORY_MAP.fashion;
+  }
+  if (text.includes('electronic') || text.includes('mobile') || text.includes('phone') || text.includes('gadget')) {
+    return CATEGORY_MAP.electronics;
+  }
+  if (text.includes('shoe') || text.includes('footwear') || text.includes('sandal') || text.includes('step')) {
+    return CATEGORY_MAP.footwear;
+  }
+  if (text.includes('toy') || text.includes('kid') || text.includes('wonderland') || text.includes('baby')) {
+    return CATEGORY_MAP.toys;
+  }
+  if (text.includes('sweet') || text.includes('mithai') || text.includes('bakery') || text.includes('cake')) {
+    return CATEGORY_MAP.bakery;
+  }
+  if (text.includes('pet') || text.includes('claw') || text.includes('paw')) {
+    return CATEGORY_MAP.pet;
+  }
+  if (text.includes('pharmacy') || text.includes('medical') || text.includes('chemist')) {
+    return CATEGORY_MAP.pharmacy;
+  }
+  if (text.includes('groc') || text.includes('kirana') || text.includes('mart') || text.includes('butter')) {
+    return CATEGORY_MAP.grocery;
+  }
+  return CATEGORY_MAP.all;
+};
 
 // ══════════════════════════════════════════════════════════════
 // SHIMMER SKELETON LOADER
@@ -94,55 +161,48 @@ const SkeletonGrid = () => (
 );
 
 // ══════════════════════════════════════════════════════════════
-// ANIMATED SHOP CARD
+// VIBRANT LOCAL SHOP CARD
 // ══════════════════════════════════════════════════════════════
 const ShopCardItem = React.memo(({ shop, onPress }: { shop: any; onPress: () => void }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const borderAnim = useRef(new Animated.Value(0)).current;
+  const aesthetic = getShopAesthetic(shop);
 
   const handlePressIn = () => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 0.97,
-        useNativeDriver: true,
-        speed: 50,
-        bounciness: 4,
-      }),
-      Animated.timing(borderAnim, {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: false,
-      }),
-    ]).start();
+    Animated.spring(scaleAnim, {
+      toValue: 0.96,
+      useNativeDriver: true,
+      speed: 50,
+      bounciness: 4,
+    }).start();
   };
 
   const handlePressOut = () => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        useNativeDriver: true,
-        speed: 50,
-        bounciness: 4,
-      }),
-      Animated.timing(borderAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: false,
-      }),
-    ]).start();
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 50,
+      bounciness: 4,
+    }).start();
   };
 
-  const borderColor = borderAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['#F0F0F0', COLORS.orange],
-  });
+  const shopName = shop.shopName || shop.name || 'Local Verified Dukaan';
+  const ownerName = shop.ownerName || shop.owner || 'Verified Merchant';
+  const shopCategory = shop.category || aesthetic.label;
+  const shopRating = Number(shop.rating) || 4.5;
+  const shopImage = shop.image || shop.imageUrl || shop.banner || shop.logo || '';
+  const isOpen = shop.isOpen !== undefined ? shop.isOpen : shop.isActive !== false;
+  const distance = shop.distance || `${(Math.random() * 1.5 + 0.4).toFixed(1)} km`;
+  const deliveryTime = shop.deliveryTime || `${Math.floor(Math.random() * 15 + 15)} MINS`;
+  const offerText = shop.offer || 'Flat 15% OFF';
 
-  const shopName = shop.shopName || shop.name || 'Local Shop';
-  const ownerName = shop.ownerName || shop.owner || '';
-  const shopCategory = shop.category || 'General';
-  const shopRating = shop.rating || 4.0;
-  const shopImage = shop.image || shop.imageUrl || shop.banner || shop.logo || shop.avatarUrl || '';
-  const isOpen = shop.isOpen !== undefined ? shop.isOpen : (shop.isActive !== false);
+  // WhatsApp quick chat
+  const handleChatWithDukaan = (e: any) => {
+    e.stopPropagation?.();
+    const msg = `Namaste ${shopName}, I found your dukaan on BazarPeth app. What are your popular deals today?`;
+    Linking.openURL(`whatsapp://send?phone=919876543210&text=${encodeURIComponent(msg)}`).catch(() => {
+      //
+    });
+  };
 
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }], width: CARD_WIDTH }}>
@@ -152,98 +212,132 @@ const ShopCardItem = React.memo(({ shop, onPress }: { shop: any; onPress: () => 
         onPressOut={handlePressOut}
         onPress={onPress}
       >
-        <Animated.View style={[styles.shopCard, { borderColor, borderWidth: 1.5 }]}>
-          {/* Shop Image */}
-          <View style={styles.shopImageContainer}>
+        <View style={styles.shopCard}>
+          {/* Shop Hero Visual Header */}
+          <View style={[styles.shopImageContainer, { backgroundColor: aesthetic.bg }]}>
             {shopImage ? (
               <Image source={{ uri: shopImage }} style={styles.shopImage} resizeMode="cover" />
             ) : (
-              <View style={styles.shopImagePlaceholder}>
-                <Text style={{ fontSize: 36 }}>🏪</Text>
+              <View style={styles.shopIllustrationWrap}>
+                <Image source={aesthetic.icon} style={styles.shopIllustrationImage} resizeMode="contain" />
               </View>
             )}
 
-            {/* Save Bookmark Icon */}
-            <TouchableOpacity 
-              onPress={shop.onToggleSave}
-              style={{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: 16, width: 28, height: 28, justifyContent: 'center', alignItems: 'center', zIndex: 10 }}
+            {/* Bookmark Favorite Icon */}
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation?.();
+                shop.onToggleSave?.();
+              }}
+              style={styles.saveBookmarkBtn}
+              activeOpacity={0.8}
             >
-              <HugeIcon icon={shop.isSaved ? StarIcon : StarIcon} size={16} color={shop.isSaved ? "#FA8C16" : "#1C1C1C"} fill={shop.isSaved ? "#FA8C16" : "transparent"} />
+              <HugeIcon
+                icon={FavouriteIcon}
+                size={15}
+                color={shop.isSaved ? '#EF4444' : '#64748B'}
+              />
             </TouchableOpacity>
 
-            {/* Open/Closed Badge */}
-            <View style={[
-              styles.statusBadge,
-              { backgroundColor: isOpen ? COLORS.openGreenBg : COLORS.closedGreyBg }
-            ]}>
-              <View style={[
-                styles.statusDot,
-                { backgroundColor: isOpen ? COLORS.openGreen : COLORS.closedGrey }
-              ]} />
-              <Text style={[
-                styles.statusText,
-                { color: isOpen ? COLORS.openGreen : COLORS.closedGrey }
-              ]}>
-                {isOpen ? 'Open' : 'Closed'}
-              </Text>
+            {/* Open / Closed Live Status */}
+            <View
+              style={[
+                styles.statusBadge,
+                { backgroundColor: isOpen ? 'rgba(22, 163, 74, 0.92)' : 'rgba(100, 116, 139, 0.92)' },
+              ]}
+            >
+              <View style={styles.statusDot} />
+              <Text style={styles.statusText}>{isOpen ? 'OPEN' : 'CLOSED'}</Text>
+            </View>
+
+            {/* Fast Delivery Badge */}
+            <View style={styles.deliveryBadgePill}>
+              <HugeIcon icon={FlashIcon} size={11} color="#FFFFFF" />
+              <Text style={styles.deliveryBadgeText}>{deliveryTime}</Text>
             </View>
           </View>
 
           {/* Card Body */}
           <View style={styles.shopCardBody}>
+            {/* Category Tag & Rating */}
+            <View style={styles.topInfoRow}>
+              <View style={[styles.categoryPill, { backgroundColor: aesthetic.bg }]}>
+                <Text style={[styles.categoryPillText, { color: aesthetic.color }]}>
+                  {aesthetic.emoji} {shopCategory}
+                </Text>
+              </View>
+
+              <View style={styles.ratingBadgeSmall}>
+                <Text style={styles.ratingTextSmall}>{shopRating.toFixed(1)} ★</Text>
+              </View>
+            </View>
+
             {/* Shop Name */}
-            <Text style={styles.shopName} numberOfLines={1}>{shopName}</Text>
+            <Text style={styles.shopName} numberOfLines={1}>
+              {shopName}
+            </Text>
 
-            {/* Category Chip */}
-            <View style={styles.categoryChipSmall}>
-              <Text style={styles.categoryChipSmallText}>{shopCategory}</Text>
-            </View>
-
-            {/* Rating Row */}
-            <View style={styles.ratingRow}>
-              <HugeIcon icon={StarIcon} size={12} color="#F59E0B" fill="#F59E0B" />
-              <Text style={styles.ratingText}>{shopRating.toFixed?.(1) || shopRating}</Text>
-            </View>
-
-            {/* Owner Name */}
-            {ownerName ? (
-              <Text style={styles.ownerName} numberOfLines={1}>
-                by {ownerName}
+            {/* Owner & Distance Row */}
+            <View style={styles.locationRow}>
+              <HugeIcon icon={Location01Icon} size={12} color="#008B45" />
+              <Text style={styles.locationText} numberOfLines={1}>
+                {distance} • Sangamner Market
               </Text>
-            ) : null}
+            </View>
+
+            {/* Owner / Dukaan Subtitle */}
+            <Text style={styles.ownerNameText} numberOfLines={1}>
+              by {ownerName}
+            </Text>
+
+            {/* Offer Strip */}
+            <View style={styles.offerStrip}>
+              <HugeIcon icon={TagIcon} size={11} color="#D97706" />
+              <Text style={styles.offerStripText} numberOfLines={1}>
+                {offerText}
+              </Text>
+            </View>
+
+            {/* Quick Action Button: Chat / Enter */}
+            <View style={styles.cardActionsRow}>
+              <TouchableOpacity
+                style={styles.chatActionBtn}
+                onPress={handleChatWithDukaan}
+                activeOpacity={0.8}
+              >
+                <Text style={{ fontSize: 13 }}>💬</Text>
+                <Text style={styles.chatActionText}>Chat</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.viewStoreActionBtn}
+                onPress={onPress}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.viewStoreActionText}>Shop</Text>
+                <HugeIcon icon={ArrowRightIcon} size={12} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
           </View>
-        </Animated.View>
+        </View>
       </TouchableOpacity>
     </Animated.View>
   );
 });
 
 // ══════════════════════════════════════════════════════════════
-// EMPTY STATE
+// EMPTY & ERROR STATES
 // ══════════════════════════════════════════════════════════════
 const EmptyState = ({ onRetry }: { onRetry: () => void }) => (
   <View style={styles.emptyContainer}>
-    <Text style={{ fontSize: 64, marginBottom: 16 }}>🛒</Text>
-    <Text style={styles.emptyTitle}>No shops nearby</Text>
+    <Text style={{ fontSize: 56, marginBottom: 12 }}>🏪</Text>
+    <Text style={styles.emptyTitle}>No dukaans found in this category</Text>
     <Text style={styles.emptySubtitle}>
-      There are no shops near you right now.{"\n"}
-      Please try again later.
+      Try searching for another neighborhood shop or reset category filters.
     </Text>
     <TouchableOpacity style={styles.retryButton} onPress={onRetry}>
       <HugeIcon icon={ReloadIcon} size={16} color="#FFFFFF" />
-      <Text style={styles.retryButtonText}>Retry</Text>
-    </TouchableOpacity>
-  </View>
-);
-
-// ══════════════════════════════════════════════════════════════
-// ERROR STATE
-// ══════════════════════════════════════════════════════════════
-const ErrorBanner = ({ message, onRetry }: { message: string; onRetry: () => void }) => (
-  <View style={styles.errorBanner}>
-    <Text style={styles.errorText}>⚠️ {message}</Text>
-    <TouchableOpacity onPress={onRetry}>
-      <Text style={styles.errorRetry}>Retry</Text>
+      <Text style={styles.retryButtonText}>Refresh Market</Text>
     </TouchableOpacity>
   </View>
 );
@@ -261,17 +355,18 @@ export default function FeriwalaScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
   // Real-time Firestore listener for saved shops
   useEffect(() => {
     const unsubscribe = subscribeToSavedShops(uid, (savedList) => {
-      setSavedShopIds(savedList.map(s => s.id));
+      setSavedShopIds(savedList.map((s) => s.id));
     });
     return () => unsubscribe();
   }, [uid]);
 
-  // Real-time Firestore listener
+  // Real-time Firestore listener for shops
   useEffect(() => {
     setLoading(true);
     setError(null);
@@ -300,7 +395,6 @@ export default function FeriwalaScreen() {
     return () => unsubscribe();
   }, []);
 
-  // Pull-to-refresh fallback (re-fetch once)
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     setError(null);
@@ -315,13 +409,30 @@ export default function FeriwalaScreen() {
     }
   }, []);
 
-  // Filter shops by category
-  const filteredShops = activeCategory === 'all'
-    ? shops
-    : shops.filter((s) => {
+  // Filter shops by category & search query
+  const filteredShops = useMemo(() => {
+    let list = [...shops];
+
+    if (activeCategory !== 'all') {
+      list = list.filter((s) => {
         const cat = (s.category || '').toLowerCase();
-        return cat.includes(activeCategory);
+        const name = (s.shopName || s.name || '').toLowerCase();
+        return cat.includes(activeCategory) || name.includes(activeCategory);
       });
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (s) =>
+          (s.shopName || s.name || '').toLowerCase().includes(q) ||
+          (s.ownerName || s.owner || '').toLowerCase().includes(q) ||
+          (s.category || '').toLowerCase().includes(q)
+      );
+    }
+
+    return list;
+  }, [shops, activeCategory, searchQuery]);
 
   const handleShopPress = (shop: any) => {
     navigation.navigate('ShopDetail', { shopId: shop.id, shop });
@@ -330,13 +441,13 @@ export default function FeriwalaScreen() {
   const renderShopCard = ({ item }: { item: any }) => {
     const isSaved = savedShopIds.includes(item.id);
     return (
-      <ShopCardItem 
+      <ShopCardItem
         shop={{
           ...item,
           isSaved,
-          onToggleSave: () => toggleSavedShop(uid, item)
-        }} 
-        onPress={() => handleShopPress(item)} 
+          onToggleSave: () => toggleSavedShop(uid, item),
+        }}
+        onPress={() => handleShopPress(item)}
       />
     );
   };
@@ -355,63 +466,80 @@ export default function FeriwalaScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            colors={[COLORS.orange]}
-            tintColor={COLORS.orange}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
           />
         }
         ListHeaderComponent={
           <>
-            {/* ── HEADER BANNER ── */}
-            <View style={styles.headerBanner}>
-              {/* Decorative Emojis */}
-              <View style={styles.headerDecoRow}>
-                <Text style={styles.headerEmoji}>🏪</Text>
-                <Text style={[styles.headerEmoji, { fontSize: 28 }]}>🛒</Text>
-                <Text style={styles.headerEmoji}>🥬</Text>
+            {/* ── 1. VIBRANT HERO BAZAR HEADER ── */}
+            <View style={styles.heroBazarBanner}>
+              <View style={styles.heroBannerTop}>
+                <View style={styles.heroLocationPill}>
+                  <HugeIcon icon={Location01Icon} size={12} color="#FFFFFF" />
+                  <Text style={styles.heroLocationText}>Sangamner Bazar</Text>
+                </View>
+                <View style={styles.liveOpenBadge}>
+                  <View style={styles.liveOpenDot} />
+                  <Text style={styles.liveOpenText}>30+ Shops Open Now</Text>
+                </View>
               </View>
 
-              {/* Title Block */}
-              <Text style={styles.headerTitle}>Local Shops</Text>
-              <Text style={styles.headerSubtitle}>Shop local, shop with love ❤️</Text>
+              <Text style={styles.heroBannerTitle}>Apna Local Bazar 🏪</Text>
+              <Text style={styles.heroBannerSubtitle}>
+                Order directly from verified neighborhood Dukaans with 15-min delivery!
+              </Text>
 
-              {/* Decorative line */}
-              <View style={styles.headerAccent} />
+              {/* Live Search Input */}
+              <View style={styles.searchBarWrap}>
+                <HugeIcon icon={Search02Icon} size={18} color="#94A3B8" />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search Kirana, Boutique, Sweets, Footwear..."
+                  placeholderTextColor="#94A3B8"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery('')}>
+                    <HugeIcon icon={Cancel01Icon} size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
 
-            {/* ── CATEGORY CHIPS ── */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.chipsContainer}
-              style={styles.chipsScroll}
-            >
-              {CATEGORY_FILTERS.map((cat) => {
-                const isActive = activeCategory === cat.id;
-                return (
-                  <TouchableOpacity
-                    key={cat.id}
-                    style={[styles.chip, isActive && styles.chipActive]}
-                    onPress={() => setActiveCategory(cat.id)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.chipEmoji}>{cat.emoji}</Text>
-                    <Text style={[styles.chipLabel, isActive && styles.chipLabelActive]}>
-                      {cat.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+            {/* ── 2. NEIGHBOURHOOD HIGHLIGHT CHIPS ── */}
+            <View style={styles.chipsScrollWrap}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chipsContainer}
+              >
+                {CATEGORY_FILTERS.map((cat) => {
+                  const isActive = activeCategory === cat.id;
+                  return (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={[styles.chip, isActive && styles.chipActive]}
+                      onPress={() => setActiveCategory(cat.id)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.chipEmoji}>{cat.emoji}</Text>
+                      <Text style={[styles.chipLabel, isActive && styles.chipLabelActive]}>
+                        {cat.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
 
-            {/* ── ERROR BANNER ── */}
-            {error ? <ErrorBanner message={error} onRetry={handleRefresh} /> : null}
-
-            {/* ── RESULTS COUNT ── */}
+            {/* ── 3. RESULTS BAR ── */}
             {!loading && !error && (
               <View style={styles.resultsRow}>
-                <HugeIcon icon={StoreIcon} size={14} color={COLORS.textMuted} />
+                <HugeIcon icon={StoreIcon} size={15} color="#008B45" />
                 <Text style={styles.resultsText}>
-                  {filteredShops.length} {filteredShops.length === 1 ? 'shop' : 'shops'} found
+                  <Text style={{ fontWeight: '700', color: '#0F172A' }}>{filteredShops.length}</Text> Verified Local Dukaans Nearby
                 </Text>
               </View>
             )}
@@ -435,284 +563,402 @@ export default function FeriwalaScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: COLORS.warmBg,
+    backgroundColor: '#F8FAFC',
   },
   listContent: {
-    paddingBottom: 100,
+    paddingBottom: 110,
   },
-
-  // ── Header ──
-  headerBanner: {
-    backgroundColor: COLORS.orange,
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: COLORS.orange,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  headerDecoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
-  },
-  headerEmoji: {
-    fontSize: 32,
-  },
-  headerTitle: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    letterSpacing: 0.5,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.85)',
-    marginTop: 6,
-    fontWeight: '500',
-    fontStyle: 'italic',
-  },
-  headerAccent: {
-    width: 40,
-    height: 3,
-    backgroundColor: 'rgba(255,255,255,0.4)',
-    borderRadius: 2,
-    marginTop: 14,
-  },
-
-  // ── Category Chips ──
-  chipsScroll: {
-    marginTop: 16,
-  },
-  chipsContainer: {
+  gridRow: {
     paddingHorizontal: 16,
-    gap: 8,
+    justifyContent: 'space-between',
+    marginBottom: 14,
   },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.cardBg,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    gap: 6,
-  },
-  chipActive: {
-    backgroundColor: COLORS.orangeLight,
-    borderColor: COLORS.orange,
-  },
-  chipEmoji: {
-    fontSize: 14,
-  },
-  chipLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textMuted,
-  },
-  chipLabelActive: {
-    color: COLORS.orangeDark,
-    fontWeight: '800',
-  },
-
-  // ── Results Row ──
-  resultsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginTop: 16,
-    marginBottom: 8,
-    gap: 6,
-  },
-  resultsText: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-    fontWeight: '600',
-  },
-
-  // ── Grid ──
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 16,
-    gap: CARD_GAP,
-  },
-  gridRow: {
-    paddingHorizontal: 16,
-    gap: CARD_GAP,
+    justifyContent: 'space-between',
   },
 
-  // ── Shop Card ──
-  shopCard: {
-    backgroundColor: COLORS.cardBg,
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
+  // ── 1. Hero Bazar Header ──
+  heroBazarBanner: {
+    backgroundColor: '#008B45',
+    marginHorizontal: 16,
+    marginTop: 10,
+    borderRadius: 20,
+    padding: 18,
+    shadowColor: '#008B45',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  heroBannerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  heroLocationPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    gap: 4,
+  },
+  heroLocationText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontFamily: 'Poppins_700Bold',
+  },
+  liveOpenBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    gap: 5,
+  },
+  liveOpenDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#16A34A',
+  },
+  liveOpenText: {
+    color: '#008B45',
+    fontSize: 10,
+    fontFamily: 'Poppins_700Bold',
+  },
+  heroBannerTitle: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontFamily: 'Poppins_800ExtraBold',
     marginBottom: 4,
-    // Shadow
+  },
+  heroBannerSubtitle: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 12,
+    fontFamily: 'Poppins_400Regular',
+    lineHeight: 18,
+    marginBottom: 14,
+  },
+  searchBarWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: 'Poppins_500Medium',
+    color: '#0F172A',
+    marginLeft: 8,
+    paddingVertical: 0,
+  },
+
+  // ── 2. Category Chips ──
+  chipsScrollWrap: {
+    backgroundColor: '#FFFFFF',
+    marginTop: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  chipsContainer: {
+    paddingHorizontal: 16,
+    gap: 8,
+    alignItems: 'center',
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  chipActive: {
+    backgroundColor: '#008B45',
+    borderColor: '#008B45',
+  },
+  chipEmoji: {
+    fontSize: 13,
+  },
+  chipLabel: {
+    fontSize: 12,
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#475569',
+  },
+  chipLabelActive: {
+    color: '#FFFFFF',
+    fontFamily: 'Poppins_700Bold',
+  },
+
+  // ── 3. Results Row ──
+  resultsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  resultsText: {
+    fontSize: 12,
+    fontFamily: 'Poppins_500Medium',
+    color: '#64748B',
+  },
+
+  // ── 4. Shop Card ──
+  shopCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
     elevation: 3,
   },
   shopImageContainer: {
     width: '100%',
-    height: CARD_WIDTH * 0.7,
-    backgroundColor: '#F5F5F5',
+    height: 120,
     position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   shopImage: {
     width: '100%',
     height: '100%',
   },
-  shopImagePlaceholder: {
+  shopIllustrationWrap: {
     width: '100%',
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.orangeLight,
+  },
+  shopIllustrationImage: {
+    width: 64,
+    height: 64,
+  },
+  saveBookmarkBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderRadius: 14,
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+    zIndex: 10,
   },
   statusBadge: {
     position: 'absolute',
     top: 8,
-    right: 8,
+    left: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
     gap: 4,
   },
   statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#FFFFFF',
   },
   statusText: {
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 9,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
   },
-  shopCardBody: {
-    padding: 12,
-  },
-  shopName: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.textPrimary,
-    marginBottom: 6,
-  },
-  categoryChipSmall: {
-    backgroundColor: COLORS.orangeLight,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-    marginBottom: 8,
-  },
-  categoryChipSmallText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.orangeDark,
-    textTransform: 'capitalize',
-  },
-  ratingRow: {
+  deliveryBadgePill: {
+    position: 'absolute',
+    bottom: 6,
+    left: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginBottom: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 3,
   },
-  ratingText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  ownerName: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    fontWeight: '500',
+  deliveryBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontFamily: 'Poppins_700Bold',
   },
 
-  // ── Shimmer ──
+  // Card Body
+  shopCardBody: {
+    padding: 10,
+  },
+  topInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  categoryPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  categoryPillText: {
+    fontSize: 9,
+    fontFamily: 'Poppins_700Bold',
+  },
+  ratingBadgeSmall: {
+    backgroundColor: '#15803D',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  ratingTextSmall: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontFamily: 'Poppins_700Bold',
+  },
+  shopName: {
+    fontSize: 13,
+    fontFamily: 'Poppins_700Bold',
+    color: '#0F172A',
+    lineHeight: 18,
+    marginBottom: 3,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginBottom: 2,
+  },
+  locationText: {
+    fontSize: 10,
+    fontFamily: 'Poppins_500Medium',
+    color: '#008B45',
+    flex: 1,
+  },
+  ownerNameText: {
+    fontSize: 10,
+    fontFamily: 'Poppins_400Regular',
+    color: '#64748B',
+    marginBottom: 6,
+  },
+  offerStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+    gap: 4,
+    marginBottom: 8,
+  },
+  offerStripText: {
+    fontSize: 9.5,
+    fontFamily: 'Poppins_700Bold',
+    color: '#B45309',
+  },
+  cardActionsRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  chatActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E8F5E9',
+    paddingVertical: 5,
+    borderRadius: 6,
+    gap: 3,
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
+  },
+  chatActionText: {
+    fontSize: 10,
+    fontFamily: 'Poppins_700Bold',
+    color: '#008B45',
+  },
+  viewStoreActionBtn: {
+    flex: 1.3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#008B45',
+    paddingVertical: 5,
+    borderRadius: 6,
+    gap: 2,
+  },
+  viewStoreActionText: {
+    fontSize: 10,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+  },
+
+  // ── Shimmer & Empty States ──
   shimmerImage: {
     width: '100%',
-    height: CARD_WIDTH * 0.7,
-    backgroundColor: COLORS.skeleton,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    height: 120,
+    backgroundColor: '#E2E8F0',
   },
   shimmerLine: {
     height: 12,
-    backgroundColor: COLORS.skeleton,
-    borderRadius: 4,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 6,
   },
-
-  // ── Empty State ──
   emptyContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: 40,
+    padding: 32,
+    marginTop: 20,
   },
   emptyTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: COLORS.textPrimary,
-    marginBottom: 8,
+    fontSize: 16,
+    fontFamily: 'Poppins_700Bold',
+    color: '#0F172A',
+    marginBottom: 6,
+    textAlign: 'center',
   },
   emptySubtitle: {
-    fontSize: 14,
-    color: COLORS.textMuted,
+    fontSize: 12,
+    fontFamily: 'Poppins_400Regular',
+    color: '#64748B',
     textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 20,
+    lineHeight: 18,
+    marginBottom: 16,
   },
   retryButton: {
+    backgroundColor: '#008B45',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.orange,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
-    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    gap: 6,
   },
   retryButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  // ── Error Banner ──
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFF2F0',
-    marginHorizontal: 16,
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FFCCC7',
-  },
-  errorText: {
-    fontSize: 13,
-    color: '#CF1322',
-    fontWeight: '600',
-    flex: 1,
-  },
-  errorRetry: {
-    fontSize: 13,
-    color: COLORS.orange,
-    fontWeight: '800',
-    marginLeft: 12,
+    fontSize: 12,
+    fontFamily: 'Poppins_700Bold',
   },
 });

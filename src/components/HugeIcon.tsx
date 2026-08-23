@@ -13,15 +13,21 @@ export interface HugeIconProps {
   opacity?: number;
 }
 
-export const HugeIcon = ({ icon, size = 24, color = '#1C1C1C', strokeWidth = 1.5, style, fill, className }: HugeIconProps) => {
-  return (
-    <HugeiconsIcon
-      icon={icon}
-      size={size}
-      color={color}
-      strokeWidth={strokeWidth}
-      style={style as any}
-      // className is used by NativeWind but TS might complain if not passed properly, we just accept it.
-    />
-  );
+export const HugeIcon = ({ icon, size = 24, color = '#1C1C1C', strokeWidth = 1.5, style }: HugeIconProps) => {
+  if (!icon || !HugeiconsIcon) return null;
+  try {
+    return (
+      <HugeiconsIcon
+        icon={icon}
+        size={size}
+        color={color}
+        strokeWidth={strokeWidth}
+        style={style as any}
+      />
+    );
+  } catch (e) {
+    return null;
+  }
 };
+
+

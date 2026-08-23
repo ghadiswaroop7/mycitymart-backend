@@ -7,10 +7,10 @@ interface SplashScreenProps {
 
 const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationFinish }) => {
   useEffect(() => {
-    // Navigate out after 3.5 seconds (Navigation logic tasach theva)
+    // Navigate out after 2.5 seconds
     const timeoutId = setTimeout(() => {
       onAnimationFinish();
-    }, 3500);
+    }, 2500);
 
     return () => clearTimeout(timeoutId);
   }, [onAnimationFinish]);
@@ -18,7 +18,7 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationFinish }) => {
   return (
     <View style={styles.container}>
       <Image
-        source={require('../../assets/splash-icon.png')}
+        source={require('../../assets/bazarpeth_icon_card_light_bg.png')}
         style={styles.logo}
         resizeMode="contain"
       />
@@ -29,14 +29,15 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationFinish }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E8A3C', // BazarPeth green
+    backgroundColor: '#FFFFFF', // BazarPeth white splash
     alignItems: 'center',
     justifyContent: 'center',
   },
   logo: {
-    width: '70%',
-    height: undefined,
-    aspectRatio: 2.5,
+    width: 160,
+    height: 160,
+    borderRadius: 24,
+    alignSelf: 'center',
   },
 });
 

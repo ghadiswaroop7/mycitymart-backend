@@ -23,7 +23,7 @@ export default function AboutUsScreen() {
         <View className="items-center mt-6 mb-8">
           <View className="w-24 h-24 rounded-3xl items-center justify-center shadow-lg mb-4 overflow-hidden border border-zinc-100 bg-white">
             <Image 
-              source={require('../../assets/icon.png')} 
+              source={require('../../assets/bazarpeth_app_icon_dark_1024x1024.png')} 
               style={{ width: '100%', height: '100%' }}
               resizeMode="contain"
             />

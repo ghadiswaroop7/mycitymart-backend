@@ -29,7 +29,7 @@ const WelcomeScreen = ({ navigation }: any) => {
           {/* ── Logo Section ── */}
           <View style={styles.logoSection}>
             <Image
-              source={require('../../assets/splash-icon.png')}
+              source={require('../../assets/bazarpeth_logo_horizontal_transparent.png')}
               style={styles.logoImage}
               resizeMode="contain"
             />

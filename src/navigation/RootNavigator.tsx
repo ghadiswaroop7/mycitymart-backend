@@ -31,6 +31,8 @@ import SignupScreen from '../screens/SignupScreen';
 
 import { registerForPushNotificationsAsync, setupOrderStatusNotificationListener } from '../services/notificationService';
 
+import BazarLoadingAnimation from '../components/BazarLoadingAnimation';
+
 const Stack = createNativeStackNavigator();
 
 export default function RootNavigator() {
@@ -92,11 +94,7 @@ export default function RootNavigator() {
   const showLoader = (!isAuthReady || authLoading || (isAuthenticated && (profileLoading || !profile))) && !isTimeout;
 
   if (showLoader) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#008B45', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#ffffff" />
-      </View>
-    );
+    return <BazarLoadingAnimation message="Welcome to BazarPeth 🛍️" submessage="Connecting to Sangamner Local Marketplace..." />;
   }
 
   return (

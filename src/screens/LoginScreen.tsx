@@ -289,7 +289,7 @@ const LoginScreen = ({ navigation }: any) => {
           <HugeIcon icon={ArrowLeft01Icon} size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Image
-          source={require('../../assets/splash-icon.png')}
+          source={require('../../assets/bazarpeth_logo_horizontal_transparent.png')}
           style={styles.headerLogo}
           resizeMode="contain"
         />

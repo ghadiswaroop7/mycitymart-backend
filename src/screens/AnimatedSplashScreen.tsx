@@ -53,9 +53,7 @@ const AnimatedSplashScreen: React.FC<AnimatedSplashScreenProps> = ({ onAnimation
   return (
     <View style={styles.container}>
       <Animated.Image
-        // Attempting to use the splash-icon from the standard Expo assets folder
-        // Alternatively, use require('../../assets/icon.png') depending on the logo name
-        source={require('../../assets/splash-icon.png')} 
+        source={require('../../assets/bazarpeth_icon_card_light_bg.png')} 
         style={[styles.logo, animatedLogoStyle]}
         resizeMode="contain"
       />
@@ -66,13 +64,15 @@ const AnimatedSplashScreen: React.FC<AnimatedSplashScreenProps> = ({ onAnimation
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#00873d', // Solid green background per spec
+    backgroundColor: '#FFFFFF', // BazarPeth white brand background
     justifyContent: 'center',
     alignItems: 'center',
   },
   logo: {
-    width: width * 0.6,
-    height: width * 0.6,
+    width: 160,
+    height: 160,
+    borderRadius: 24,
+    alignSelf: 'center',
   },
 });
 

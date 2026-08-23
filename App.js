@@ -1,13 +1,12 @@
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Platform, Text, View, StyleSheet as RNStyleSheet } from 'react-native';
 import { Provider } from 'react-redux';
 import { store } from './src/store';
 import RootNavigator from './src/navigation/RootNavigator';
 import { AuthProvider } from './src/context/AuthContext';
-import SplashScreenComponent from './src/screens/SplashScreen';
 import * as SplashScreen from 'expo-splash-screen';
 import {
   useFonts,
@@ -19,6 +18,16 @@ import {
   Poppins_800ExtraBold
 } from '@expo-google-fonts/poppins';
 import './global.css';
+
+// Fix NativeWind Web dark-mode error: must be called before any render
+// This tells react-native-css-interop to use class-based dark mode on Web
+if (Platform.OS === 'web') {
+  const { StyleSheet: CSSInteropStyleSheet } = require('react-native-css-interop');
+  if (CSSInteropStyleSheet?.setFlag) {
+    CSSInteropStyleSheet.setFlag('darkMode', 'class');
+  }
+}
+
 
 // ---------------------------------------------------------------------------
 // Global Error Boundary — prevents a blank crash screen on Android
@@ -65,18 +74,17 @@ const errorStyles = RNStyleSheet.create({
 });
 
 // ---------------------------------------------------------------------------
-// Keep the native splash screen visible while bootstrapping
+// Keep the native splash screen visible while bootstrapping fonts & state
 // ---------------------------------------------------------------------------
 try {
   if (Platform.OS !== 'web') {
     SplashScreen.preventAutoHideAsync();
   }
 } catch (e) {
-  // Silently ignore — splash screen may not be available in all environments
+  // Silently ignore
 }
 
 function AppContent() {
-  const [isSplashFinished, setIsSplashFinished] = useState(false);
   const [fontLoadTimeout, setFontLoadTimeout] = useState(false);
 
   const [fontsLoaded] = useFonts({
@@ -89,43 +97,57 @@ function AppContent() {
   });
 
   useEffect(() => {
-    // Set a fallback timeout of 5 seconds to prevent getting stuck if fonts fail to load
+    // Fallback safety timeout (4 seconds) so the splash screen doesn't hang indefinitely if fonts fail
     const timer = setTimeout(() => {
       setFontLoadTimeout(true);
-    }, 5000);
+    }, 4000);
     return () => clearTimeout(timer);
   }, []);
 
-  const fontsReady = fontsLoaded || fontLoadTimeout;
+  const appIsReady = Platform.OS === 'web' || Boolean(fontsLoaded) || fontLoadTimeout;
 
-  useEffect(() => {
-    // Dismiss the native splash screen once fonts are ready or timeout occurs
-    if (fontsReady) {
+  const onNavigationReady = useCallback(async () => {
+    if (appIsReady) {
       try {
         if (Platform.OS !== 'web') {
-          SplashScreen.hideAsync();
+          await SplashScreen.hideAsync();
         }
       } catch (e) {
         // Silently ignore
       }
     }
-  }, [fontsReady]);
+  }, [appIsReady]);
 
-  // Render the custom splash screen if the animation is not finished OR fonts are not ready yet
-  const showSplash = !isSplashFinished || !fontsReady;
+  useEffect(() => {
+    // If navigation doesn't trigger onReady immediately, ensure splash is dismissed when ready
+    if (appIsReady) {
+      const hideTimer = setTimeout(async () => {
+        try {
+          if (Platform.OS !== 'web') {
+            await SplashScreen.hideAsync();
+          }
+        } catch (e) {}
+      }, 150);
+      return () => clearTimeout(hideTimer);
+    }
+  }, [appIsReady]);
+
+  if (!appIsReady) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#008B45' }}>🛍️ BazarPeth</Text>
+      </View>
+    );
+  }
 
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider style={{ flex: 1, width: '100%', height: '100%' }}>
       <Provider store={store}>
         <AuthProvider>
-          {showSplash ? (
-            <SplashScreenComponent onAnimationFinish={() => setIsSplashFinished(true)} />
-          ) : (
-            <NavigationContainer>
-              <RootNavigator />
-              <StatusBar style="auto" />
-            </NavigationContainer>
-          )}
+          <NavigationContainer onReady={onNavigationReady}>
+            <RootNavigator />
+            <StatusBar style="auto" />
+          </NavigationContainer>
         </AuthProvider>
       </Provider>
     </SafeAreaProvider>

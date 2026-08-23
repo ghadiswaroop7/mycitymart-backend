@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, ScrollView, Text, ActivityIndicator, Image, TouchableOpacity, StyleSheet, Dimensions, Animated, TextInput, FlatList } from 'react-native';
+import { View, ScrollView, Text, ActivityIndicator, Image, TouchableOpacity, StyleSheet, Dimensions, Animated, TextInput, FlatList, Modal, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { Video as ExpoAvVideo, ResizeMode } from 'expo-av';
 import LottieView from 'lottie-react-native';
 import Reanimated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
 import Svg, { Path, ClipPath, Defs, G, Image as SvgImage } from 'react-native-svg';
+import YoutubeVideoPlayer from './YoutubeVideoPlayer';
 import { getStorefrontLayouts, getProducts, getLocalShops, getBanners, getActiveFlashDeals, getCategories, createSampleBanners } from '../services/firestoreService';
 import { collection, getDocs, query, where, documentId, orderBy, doc, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -20,168 +23,93 @@ import { addToCart } from '../store/slices/cartSlice';
 import { RootState } from '../store';
 import { CATEGORIES } from '../config/categories';
 import { TAB_THEMES } from '../config/tabThemes';
+import { useHomepageData } from '../hooks/useHomepageData';
 
 import HomeTabBar from '../components/HomeTabBar';
 import ProductCard from '../components/ProductCard';
 import MiniProductCard from '../components/MiniProductCard';
 import SafeImage from '../components/SafeImage';
+import DynamicPageBuilder from '../components/sdui/DynamicPageBuilder';
+import SDUIRenderer from '../components/SDUIRenderer';
+import UniversalSDUIRenderer from '../components/sdui/UniversalSDUIRenderer';
+import HeaderBannerCarousel from '../components/HeaderBannerCarousel';
+import CategoryStories from '../components/CategoryStories';
+import ExploreCategoriesGrid from '../components/ExploreCategoriesGrid';
+import LiveProductsCatalog from '../components/LiveProductsCatalog';
+import { handleSDUILink } from '../utils/sduiNavigation';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const BANNER_ASPECT_RATIO = 2.4;
 const BANNER_HEIGHT = Math.round(SCREEN_WIDTH / BANNER_ASPECT_RATIO);
-const HERO_TOP_PADDING = 92;
+const HERO_TOP_PADDING = 140;
 const TOTAL_HEADER_HEIGHT = BANNER_HEIGHT + HERO_TOP_PADDING;
 
-// Organic Blob Paths matching user's exact 4 reference image shapes
-const ORGANIC_BLOBS = [
-  // Shape 1 (Fruit Basket: 4 distinct lobes, pinched waist)
-  "M 26,14 C 45,20 68,6 82,14 C 96,26 82,48 92,68 C 98,84 74,94 48,88 C 28,82 12,86 10,68 C 8,48 12,24 26,14 Z",
-  // Shape 2 (Coffee: wide top right bulge, pinched lower right)
-  "M 30,10 C 58,4 82,10 92,32 C 100,54 78,66 90,86 C 82,98 52,90 28,94 C 10,92 8,68 10,48 C 12,26 12,14 30,10 Z",
-  // Shape 3 (Fashion: tall left lobe, flared bottom right)
-  "M 20,8 C 46,18 78,8 88,24 C 96,40 76,60 88,80 C 94,94 60,96 34,92 C 12,88 6,66 8,42 C 10,20 6,10 20,8 Z",
-  // Shape 4 (Perfume: high top-right lobe, smooth bottom curve)
-  "M 24,18 C 50,14 84,6 92,26 C 98,46 84,66 94,84 C 90,96 56,94 30,90 C 12,86 8,64 10,42 C 12,22 8,20 24,18 Z",
-];
-
-// Category Icon (Organic Blob Shape with Animated Breathing Glow Border)
-const AnimatedCategoryIcon = ({ cat, idx, onPress }: { cat: any, idx: number, onPress: () => void }) => {
-  const blobPath = ORGANIC_BLOBS[idx % ORGANIC_BLOBS.length];
-  const size = 78;
-  const glowSize = size + 8; // slightly larger for glow ring
-  const clipId = `blobClip-${cat.id || idx}`;
+// Professional Meesho-Style Category Icon (Big Squircle Card with Soft Pastel Tone & High-Def Artwork)
+const AnimatedCategoryIcon = ({ cat, idx, onPress }: { cat: any; idx?: number; onPress: () => void }) => {
   const imageSrc = cat.image || cat.iconUrl;
-  const resolvedSrc = typeof imageSrc === 'string' ? { uri: imageSrc } : imageSrc;
-
-  // Each icon gets a staggered animation start so they don't all pulse in sync
-  const glowOpacity = useSharedValue(0.3);
-
-  useEffect(() => {
-    glowOpacity.value = withRepeat(
-      withSequence(
-        withTiming(0.9, { duration: 1400 + idx * 200 }),
-        withTiming(0.25, { duration: 1400 + idx * 200 })
-      ),
-      -1,
-      true
-    );
-  }, []);
-
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: glowOpacity.value,
-  }));
-
-  // Gradient glow colors per icon for variety
-  const GLOW_COLORS = ['#EC4899', '#8B5CF6', '#3B82F6', '#F97316'];
-  const glowColor = GLOW_COLORS[idx % GLOW_COLORS.length];
+  const bgBadgeColor = cat.color || '#F8FAFC';
 
   return (
     <TouchableOpacity
-      activeOpacity={0.85}
+      activeOpacity={0.82}
       onPress={onPress}
-      style={{ alignItems: 'center', marginRight: 14, width: 82 }}
+      style={styles_cat.itemContainer}
     >
-      <View style={{ width: glowSize, height: glowSize, justifyContent: 'center', alignItems: 'center', position: 'relative', marginBottom: 4 }}>
-        {/* Animated Spread Glow — OUTSIDE only, clipped so nothing bleeds inward */}
-        <Reanimated.View style={[{ position: 'absolute', top: 0, left: 0, width: glowSize, height: glowSize }, glowStyle]}>
-          <Svg width={glowSize} height={glowSize} viewBox="-8 -8 116 116">
-            <Defs>
-              {/* Inverse clip: big rect minus blob shape = only outside area visible */}
-              <ClipPath id={`outerGlow-${cat.id || idx}`}>
-                <Path
-                  d={`M -20,-20 L 120,-20 L 120,120 L -20,120 Z ${blobPath}`}
-                  clipRule="evenodd"
-                  fillRule="evenodd"
-                />
-              </ClipPath>
-            </Defs>
-            <G clipPath={`url(#outerGlow-${cat.id || idx})`}>
-              {/* Outermost soft spread layer */}
-              <Path
-                d={blobPath}
-                fill="none"
-                stroke={glowColor}
-                strokeWidth="16"
-                strokeLinejoin="round"
-                opacity={0.12}
-              />
-              {/* Mid spread layer */}
-              <Path
-                d={blobPath}
-                fill="none"
-                stroke={glowColor}
-                strokeWidth="10"
-                strokeLinejoin="round"
-                opacity={0.28}
-              />
-              {/* Inner glow layer (tight to edge) */}
-              <Path
-                d={blobPath}
-                fill="none"
-                stroke={glowColor}
-                strokeWidth="5"
-                strokeLinejoin="round"
-                opacity={0.5}
-              />
-            </G>
-          </Svg>
-        </Reanimated.View>
-
-        {/* Main Icon (exact same shape, size, fill, clip, border) */}
-        <Svg width={size} height={size} viewBox="0 0 100 100">
-          <Defs>
-            <ClipPath id={clipId}>
-              <Path d={blobPath} />
-            </ClipPath>
-          </Defs>
-
-          {/* Warm Cream Base Fill */}
-          <Path d={blobPath} fill="#FFEEDC" />
-
-          {/* Image Clipped 100% inside the Organic Blob Contour */}
-          {imageSrc ? (
-            <G clipPath={`url(#${clipId})`}>
-              <SvgImage
-                href={resolvedSrc}
-                x="0"
-                y="0"
-                width="100"
-                height="100"
-                preserveAspectRatio="xMidYMid slice"
-              />
-            </G>
-          ) : null}
-
-          {/* Sharp Dark Navy Outline Border */}
-          <Path
-            d={blobPath}
-            fill="none"
-            stroke="#172136"
-            strokeWidth="3.5"
-            strokeLinejoin="round"
+      {/* Big Meesho-Style Squircle Card */}
+      <View style={[styles_cat.iconBadge, { backgroundColor: bgBadgeColor }]}>
+        {imageSrc ? (
+          <Image
+            source={typeof imageSrc === 'string' ? { uri: imageSrc } : imageSrc}
+            style={styles_cat.iconImage}
+            resizeMode="contain"
           />
-        </Svg>
-
-        {!imageSrc && (
-          <Text style={{ position: 'absolute', fontSize: 32, zIndex: 2 }}>{cat.icon || '🛍️'}</Text>
+        ) : (
+          <Text style={{ fontSize: 32 }}>{cat.icon || '🛍️'}</Text>
         )}
       </View>
 
-      <Text
-        style={{
-          fontSize: 11,
-          fontFamily: 'Poppins_600SemiBold',
-          color: '#1E293B',
-          textAlign: 'center',
-          lineHeight: 15,
-        }}
-        numberOfLines={2}
-      >
+      {/* Clean Category Label */}
+      <Text style={styles_cat.label} numberOfLines={2}>
         {cat.label || cat.name}
       </Text>
     </TouchableOpacity>
   );
 };
+
+const styles_cat = StyleSheet.create({
+  itemContainer: {
+    alignItems: 'center',
+    marginRight: 14,
+    width: 76,
+  },
+  iconBadge: {
+    width: 72,
+    height: 72,
+    borderRadius: 20, // Clean professional squircle shape like Meesho
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    marginBottom: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  iconImage: {
+    width: 58,
+    height: 58,
+  },
+  label: {
+    fontSize: 11.5,
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#1E293B',
+    textAlign: 'center',
+    lineHeight: 15,
+  },
+});
 
 // Animated Breathing Gradient Background
 const AnimatedGradientBackground = ({ colors }: { colors: [string, string, ...string[]] }) => {
@@ -219,27 +147,213 @@ const AnimatedGradientBackground = ({ colors }: { colors: [string, string, ...st
   );
 };
 
-// Video Background Component to safely use hooks
-const HeroVideoBackground = ({ source: videoUrl }: { source: string }) => {
-  // Log the video URL right before player initialization
-  const player = useVideoPlayer(videoUrl || '', player => {
-    player.loop = true;
-    player.muted = true;
-    player.play();
-  });
+// Safe Lottie Component for Web & Mobile
+const SafeLottieView = (props: any) => {
+  const LottieComp: any = typeof LottieView === 'function' ? LottieView : (LottieView as any)?.default;
+  if (!LottieComp || typeof LottieComp !== 'function') return null;
+  try {
+    return <LottieComp {...props} />;
+  } catch (e) {
+    return null;
+  }
+};
 
-  const lastLoadedUrlRef = useRef<string | null>(videoUrl || null);
+// Helper to extract YouTube ID
+const getYoutubeIdFromUrl = (url: string) => {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[2].length === 11) ? match[2] : null;
+};
+
+// Video Background Component with seamless Web & Native video support
+const HeroVideoBackground = ({ source: videoUrl }: { source: string }) => {
+  if (!videoUrl) return null;
+
+  const ytId = getYoutubeIdFromUrl(videoUrl);
+  if (ytId) {
+    if (Platform.OS === 'web') {
+      return (
+        <iframe
+          src={`https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&controls=0&showinfo=0&rel=0`}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            border: 0,
+            pointerEvents: 'none',
+          } as any}
+          allow="autoplay; encrypted-media"
+          title="Hero Video"
+        />
+      );
+    }
+    return (
+      <View style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}>
+        <YoutubeVideoPlayer videoId={ytId} />
+      </View>
+    );
+  }
+
+  if (Platform.OS === 'web') {
+    return (
+      <video
+        src={videoUrl}
+        autoPlay
+        loop
+        muted
+        playsInline
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          pointerEvents: 'none',
+        } as any}
+      />
+    );
+  }
+
+  return (
+    <ExpoAvVideo
+      source={{ uri: videoUrl }}
+      style={StyleSheet.absoluteFill}
+      resizeMode={ResizeMode.COVER}
+      isLooping
+      shouldPlay
+      isMuted
+      useNativeControls={false}
+    />
+  );
+};
+
+// Universal Banner Media Component (Supports .webm, .mp4, YouTube, Giphy, Shutterstock, Cloudinary, etc.)
+// Universal Web Video Player that strictly guarantees autoplay and loop on all desktop/mobile browsers
+const Html5Video = ({ src, style }: { src: string; style?: any }) => {
+  const videoRef = useRef<any>(null);
 
   useEffect(() => {
-    if (!player || !videoUrl) return;
-    if (lastLoadedUrlRef.current !== videoUrl) {
-      player.replace(videoUrl);
-      lastLoadedUrlRef.current = videoUrl;
-      player.play();
+    const el = videoRef.current;
+    if (el) {
+      el.muted = true;
+      el.defaultMuted = true;
+      el.playsInline = true;
+      el.autoplay = true;
+      el.loop = true;
+      el.setAttribute('playsinline', 'true');
+      el.setAttribute('webkit-playsinline', 'true');
+      el.setAttribute('muted', 'true');
+      el.setAttribute('autoplay', 'true');
+      el.setAttribute('loop', 'true');
+      const promise = el.play();
+      if (promise !== undefined) {
+        promise.catch(() => {});
+      }
     }
-  }, [player, videoUrl]);
+  }, [src]);
 
-  return <VideoView style={StyleSheet.absoluteFill} player={player} contentFit="cover" />;
+  const mp4Src = src.replace(/\.webm(\?.*)?$/i, '.mp4$1');
+
+  return (
+    <video
+      ref={videoRef}
+      src={src}
+      autoPlay
+      loop
+      muted
+      playsInline
+      preload="auto"
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        minWidth: '100%',
+        minHeight: '100%',
+        objectFit: 'cover',
+        pointerEvents: 'none',
+        zIndex: 0,
+        ...style,
+      } as any}
+    >
+      <source src={src} type={src.includes('.webm') ? 'video/webm' : 'video/mp4'} />
+      <source src={mp4Src} type="video/mp4" />
+    </video>
+  );
+};
+
+// Universal Banner Media Component (Supports .webm, .mp4, YouTube, Giphy, Shutterstock, Cloudinary, etc.)
+const BannerUniversalMedia = ({
+  source,
+  isVideo,
+  style,
+}: {
+  source: string;
+  isVideo: boolean;
+  style: any;
+}) => {
+  let normalizedSource = (source || '').trim();
+  if (Platform.OS !== 'web' && normalizedSource.includes('.webm')) {
+    normalizedSource = normalizedSource.replace(/\.webm(\?.*)?$/i, '.mp4$1');
+  }
+
+  const ytId = getYoutubeIdFromUrl(normalizedSource);
+
+  if (ytId) {
+    if (Platform.OS === 'web') {
+      return (
+        <iframe
+          src={`https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&controls=0&showinfo=0&rel=0&modestbranding=1`}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            border: 0,
+            pointerEvents: 'none',
+          } as any}
+          allow="autoplay; encrypted-media"
+          title="Banner Video"
+        />
+      );
+    }
+    return (
+      <View style={[style, { overflow: 'hidden' }]}>
+        <YoutubeVideoPlayer videoId={ytId} />
+      </View>
+    );
+  }
+
+  if (isVideo) {
+    if (Platform.OS === 'web') {
+      return <Html5Video src={normalizedSource} style={style} />;
+    }
+    return (
+      <ExpoAvVideo
+        source={{ uri: normalizedSource }}
+        style={[style, StyleSheet.absoluteFill]}
+        resizeMode={ResizeMode.COVER}
+        isLooping
+        shouldPlay
+        isMuted
+        useNativeControls={false}
+      />
+    );
+  }
+
+  return (
+    <SafeImage
+      uri={source}
+      style={style}
+      resizeMode="cover"
+    />
+  );
 };
 
 // Premium Skeleton Loader for fetching states
@@ -1236,42 +1350,101 @@ const buildCategoryIcons = (products: any[]) => {
 };
 
 const getTabProducts = (tab: string, products: any[]) => {
-  if (tab === 'ALL') return products;
-  if (tab === 'LOCAL SHOPS') return [];
+  if (!tab || tab.toUpperCase() === 'ALL') return products;
+  if (tab.toUpperCase() === 'LOCAL SHOPS') return [];
   
+  const tabUpper = tab.toUpperCase().trim();
+
   return products.filter(product => {
-    const cat = (product.category || '').toLowerCase();
-    const subcat = (product.subcategory || '').toLowerCase();
-    const tags = Array.isArray(product.tags) ? product.tags : 
-                 (typeof product.tags === 'string' ? [product.tags] : []);
-                 
-    switch(tab) {
+    const cat = (product.category || product.categoryId || '').toLowerCase().trim();
+    const subcat = (product.subcategory || product.subCategoryId || '').toLowerCase().trim();
+    const name = (product.name || product.title || '').toLowerCase();
+    const tags = Array.isArray(product.tags) 
+      ? product.tags.map((t: any) => String(t).toLowerCase()) 
+      : (typeof product.tags === 'string' ? [product.tags.toLowerCase()] : []);
+
+    // Specific category flags to prevent false matches
+    const isWomenSpecific = 
+      cat === 'women' || cat === 'women_western' || cat === 'kurti_saree' || cat === 'lingerie' ||
+      cat.startsWith('women') || cat.includes('saree') || cat.includes('kurti') || cat.includes('lehenga') ||
+      subcat.includes('saree') || subcat.includes('kurti') || subcat.includes('western') || subcat.includes('lingerie') ||
+      name.includes('saree') || name.includes('kurti') || name.includes('lehenga') || name.includes('dupatta') || name.includes('salwar') ||
+      tags.some((t: string) => t === 'women' || t.includes('saree') || t.includes('kurti') || t.includes('lehenga'));
+
+    const isElectronicsSpecific = 
+      cat === 'electronics' || cat === 'gadgets' || cat === 'audio' || cat === 'mobile_acc' || cat === 'smartwatch' || cat === 'appliances' ||
+      cat.includes('elect') || cat.includes('gadget') ||
+      subcat.includes('audio') || subcat.includes('earbud') || subcat.includes('cable') || subcat.includes('charger') || subcat.includes('smartwatch') || subcat.includes('appliances') ||
+      name.includes('earbud') || name.includes('bluetooth') || name.includes('headphone') || name.includes('smartwatch') || name.includes('charger') || name.includes('usb') ||
+      tags.some((t: string) => t.includes('electronics') || t.includes('gadget') || t.includes('audio') || t.includes('bluetooth'));
+
+    const isKidsSpecific = 
+      !isElectronicsSpecific && !isWomenSpecific && (
+        cat === 'kids_toys' || cat === 'kids' || cat === 'toys' || cat === 'baby' || cat === 'babycare' ||
+        subcat.includes('kid') || subcat.includes('toy') || subcat.includes('baby') || subcat.includes('school') ||
+        tags.some((t: string) => t === 'kids' || t === 'toys' || t === 'baby')
+      );
+
+    const isBeautySpecific = 
+      !isElectronicsSpecific && (
+        cat === 'beauty' || cat === 'beauty_health' || cat === 'cosmetics' || cat === 'skincare' ||
+        subcat.includes('skincare') || subcat.includes('makeup') || subcat.includes('haircare') || subcat.includes('fragrance') || subcat.includes('perfume') || subcat.includes('grooming') ||
+        name.includes('shampoo') || name.includes('perfume') || name.includes('lipstick') || name.includes('lotion') || name.includes('serum') ||
+        tags.some((t: string) => t.includes('beauty') || t.includes('makeup') || t.includes('skincare') || t.includes('perfume'))
+      );
+
+    const isGrocerySpecific = 
+      !isElectronicsSpecific && !isBeautySpecific && (
+        cat === 'grocery' || cat === 'groceries' || cat === 'fruits_veg' || cat === 'dairy' || cat === 'spices' || cat === 'staples' || cat === 'food' ||
+        cat.includes('groc') ||
+        subcat.includes('fruit') || subcat.includes('veg') || subcat.includes('dairy') || subcat.includes('ghee') || subcat.includes('spice') || subcat.includes('staple') || subcat.includes('atta') || subcat.includes('rice') ||
+        name.includes('ghee') || name.includes('oil') || name.includes('atta') || name.includes('rice') || name.includes('masala') || name.includes('tea') || name.includes('biscuit') ||
+        tags.some((t: string) => t.includes('grocery') || t.includes('food') || t.includes('ghee') || t.includes('spice'))
+      );
+
+    const isJewellerySpecific = 
+      cat === 'jewellery' || cat === 'jewellery_accessories' || cat === 'jewelry' ||
+      subcat.includes('jewel') || subcat.includes('necklace') || subcat.includes('ring') || subcat.includes('earring') || subcat.includes('bangle') ||
+      name.includes('necklace') || name.includes('earring') || name.includes('pendant') || name.includes('bangle') || name.includes('mangalsutra') ||
+      tags.some((t: string) => t.includes('jewellery') || t.includes('jewelry') || t.includes('gold') || t.includes('silver'));
+
+    const isMenSpecific = 
+      !isWomenSpecific && !isKidsSpecific && !isElectronicsSpecific && !isBeautySpecific && !isGrocerySpecific && !isJewellerySpecific && (
+        cat === 'men' || cat === 'mens' || cat === 'menswear' || cat === 'men_fashion' ||
+        subcat === 'casual' || subcat === 'ethnic' || subcat === 'menswear' || subcat.includes('men') ||
+        name.includes('men ') || name.startsWith("men's") || name.startsWith("mens") || name.includes("men's shirt") || name.includes("men's t-shirt") || name.includes("men kurta") ||
+        tags.some((t: string) => t === 'men' || t === 'mens' || t === 'menswear' || t === 'male')
+      );
+
+    switch (tabUpper) {
       case 'MEN':
-        return cat.includes('men') || cat.includes('male') ||
-               subcat.includes('men') ||
-               tags.some((t: string) => t.toLowerCase().includes('men')) ||
-               (cat === 'fashion' && subcat.includes('men'));
-               
+        return isMenSpecific;
+
       case 'WOMEN':
-        return cat.includes('women') || cat.includes('female') ||
-               cat.includes('ladies') || cat.includes('girl') ||
-               subcat.includes('women') ||
-               tags.some((t: string) => t.toLowerCase().includes('women'));
-               
+        return isWomenSpecific;
+
       case 'KIDS':
-        return cat.includes('kids') || cat.includes('child') ||
-               cat.includes('baby') || cat.includes('boy') ||
-               subcat.includes('kids') ||
-               tags.some((t: string) => t.toLowerCase().includes('kids'));
-               
+        return isKidsSpecific;
+
       case 'BEAUTY':
-        return cat.includes('beauty') || cat.includes('cosmetic') || cat.includes('makeup') ||
-               cat.includes('skincare') || cat.includes('fragrance') || cat.includes('perfume') ||
-               subcat.includes('beauty') || subcat.includes('cosmetic') ||
-               tags.some((t: string) => ['beauty', 'cosmetic', 'makeup', 'skincare', 'perfume'].some(keyword => t.toLowerCase().includes(keyword)));
-               
-      default:
-        return false;
+        return isBeautySpecific;
+
+      case 'GROCERIES':
+      case 'GROCERY':
+        return isGrocerySpecific;
+
+      case 'ELECTRONICS':
+      case 'GADGETS':
+        return isElectronicsSpecific;
+
+      case 'JEWELLERY':
+      case 'JEWELRY':
+        return isJewellerySpecific;
+
+      default: {
+        const tabLower = tab.toLowerCase().trim();
+        return cat === tabLower || subcat === tabLower || tags.includes(tabLower);
+      }
     }
   });
 };
@@ -1311,6 +1484,60 @@ export default function HomeScreen() {
   const [activeTab, setActiveTab] = useState('ALL');
   const [selectedCategory, setSelectedCategory] = useState('all');
 
+  // Camera Visual Search State
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
+  const [isProcessingVisualSearch, setIsProcessingVisualSearch] = useState(false);
+
+  const handleLaunchCamera = async () => {
+    setIsCameraModalOpen(false);
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission Required', 'Please allow camera access to search products by photo.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        setIsProcessingVisualSearch(true);
+        setTimeout(() => {
+          setIsProcessingVisualSearch(false);
+          navigation.navigate('Search', { initialQuery: 'Fashion' });
+        }, 1000);
+      }
+    } catch (e) {
+      console.error('Camera Search Error:', e);
+    }
+  };
+
+  const handleLaunchGallery = async () => {
+    setIsCameraModalOpen(false);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        setIsProcessingVisualSearch(true);
+        setTimeout(() => {
+          setIsProcessingVisualSearch(false);
+          navigation.navigate('Search', { initialQuery: 'Trending' });
+        }, 1000);
+      }
+    } catch (e) {
+      console.error('Gallery Search Error:', e);
+    }
+  };
+
+  // Dynamic layout & content fetched from Firestore 'app_homepage_layout' collection
+  const { data: tabLayout, loading: isTabLayoutLoading } = useHomepageData(activeTab);
+
   const tabFadeOpacity = useSharedValue(1);
   const animatedTabStyle = useAnimatedStyle(() => ({
     opacity: tabFadeOpacity.value,
@@ -1332,6 +1559,7 @@ export default function HomeScreen() {
   
   const flatListRef = useRef<FlatList>(null);
   const activeIndexRef = useRef(0);
+  const [activeTopIndex, setActiveTopIndex] = useState(0);
   const scrollX = useRef(new Animated.Value(0)).current;
 
   // Live Firebase syncing states
@@ -1370,39 +1598,89 @@ export default function HomeScreen() {
   const [banners, setBanners] = useState<any[]>([]);
   const [flashDeals, setFlashDeals] = useState<any[]>([]);
 
+  const [storefrontTimeout, setStorefrontTimeout] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setStorefrontTimeout(true);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Compute overall storefront loading status, ensuring the user's profile is ready
   const isStorefrontLoading =
-    loadingLayouts ||
-    loadingSettings ||
-    loadingPromoOffers ||
-    loadingCategories ||
-    (isAuthenticated && (profileLoading || !profile));
+    !storefrontTimeout &&
+    (loadingLayouts ||
+     loadingSettings ||
+     loadingPromoOffers ||
+     loadingCategories ||
+     (isAuthenticated && (profileLoading || !profile)));
 
-  const headerHeight = promoOffers.length > 0
-    ? scrollY.interpolate({
-        inputRange: [0, BANNER_HEIGHT],
-        outputRange: [TOTAL_HEADER_HEIGHT, 160],
-        extrapolate: 'clamp'
-      })
-    : 160;
+  const COLLAPSED_HEADER_HEIGHT = 140;
 
-  const headerBackgroundColor = promoOffers.length >= 2
+  const defaultHeaderSlide = {
+    id: 'default_hero_video_offer',
+    title: 'Limited Time Offers Just For You!',
+    subtitle: 'Exclusive deals on your favorite products',
+    tag: 'Limited Offer',
+    badge: 'Limited Offer',
+    buttonText: 'Shop Now',
+    ctaText: 'Shop Now',
+    bgColor: '#1D58EE',
+    videoUrl: 'https://www.shutterstock.com/shutterstock/videos/4140539077/preview/stock-footage-black-friday-special-offer-animated-label-sale-video.webm',
+    displayLayout: 'full_cover',
+  };
+
+  const headerTopSlides = React.useMemo(() => {
+    if (tabLayout?.heroSlides && tabLayout.heroSlides.length > 0) {
+      return tabLayout.heroSlides;
+    }
+    const combined = [
+      ...(tabLayout?.heroBanner ? [tabLayout.heroBanner] : []),
+      ...(promoOffers && promoOffers.length > 0 ? promoOffers : [])
+    ];
+    if (combined.length > 0) {
+      return combined;
+    }
+    return [defaultHeaderSlide];
+  }, [tabLayout, promoOffers]);
+
+  const headerHeight = scrollY.interpolate({
+    inputRange: [0, BANNER_HEIGHT],
+    outputRange: [TOTAL_HEADER_HEIGHT, COLLAPSED_HEADER_HEIGHT],
+    extrapolate: 'clamp'
+  });
+
+  const headerBorderRadius = scrollY.interpolate({
+    inputRange: [0, 80],
+    outputRange: [32, 0],
+    extrapolate: 'clamp'
+  });
+
+  const headerShadowOpacity = scrollY.interpolate({
+    inputRange: [0, 60],
+    outputRange: [0, 0.2],
+    extrapolate: 'clamp'
+  });
+
+  const headerBackgroundColor = headerTopSlides.length >= 2
     ? scrollX.interpolate({
-        inputRange: promoOffers.map((_, index) => index * SCREEN_WIDTH),
-        outputRange: promoOffers.map(offer => offer.bgColor || '#008B45'),
+        inputRange: headerTopSlides.map((_, index) => index * SCREEN_WIDTH),
+        outputRange: headerTopSlides.map(offer => offer.bgColor || '#008B45'),
         extrapolate: 'clamp',
       })
-    : (promoOffers[0]?.bgColor || '#008B45');
+    : (headerTopSlides[0]?.bgColor || '#008B45');
 
-  // Automatic scrolling timer for promo banners
+  // Automatic scrolling timer for header top banners
   useEffect(() => {
-    if (promoOffers.length <= 1) return;
+    if (headerTopSlides.length <= 1) return;
     const timer = setInterval(() => {
       let nextIndex = activeIndexRef.current + 1;
-      if (nextIndex >= promoOffers.length) {
+      if (nextIndex >= headerTopSlides.length) {
         nextIndex = 0;
       }
       activeIndexRef.current = nextIndex;
+      setActiveTopIndex(nextIndex);
       try {
         flatListRef.current?.scrollToIndex({
           index: nextIndex,
@@ -1411,14 +1689,17 @@ export default function HomeScreen() {
       } catch (e) {
         // Safe catch if unmounted/not ready
       }
-    }, 3000);
+    }, 4500);
     return () => clearInterval(timer);
-  }, [promoOffers]);
+  }, [headerTopSlides]);
 
   const handleScrollEnd = (e: any) => {
-    const offset = e.nativeEvent.contentOffset.x;
+    const offset = e?.nativeEvent?.contentOffset?.x || 0;
     const index = Math.round(offset / SCREEN_WIDTH);
-    activeIndexRef.current = index;
+    if (index >= 0 && index < headerTopSlides.length) {
+      activeIndexRef.current = index;
+      setActiveTopIndex(index);
+    }
   };
 
   // 1. Live Sync for Promo Offers (banners collection)
@@ -1426,16 +1707,17 @@ export default function HomeScreen() {
     if (isAuthenticated && profileLoading) {
       return;
     }
-    const q = query(
-      collection(db, 'banners'),
-      where('status', '==', 'active')
-    );
+    const q = collection(db, 'banners');
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let fetchedBanners = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
+      // Filter out inactive banners in memory
+      fetchedBanners = fetchedBanners.filter((b: any) => 
+        b.status !== 'inactive' && b.status !== 'Inactive' && b.isActive !== false
+      );
       // Filter in memory to allow both user-city matching and global/national banners
       if (userCity) {
         fetchedBanners = fetchedBanners.filter((b: any) => !b.city || b.city === userCity || b.city === 'global' || b.city === 'national');
@@ -1645,39 +1927,70 @@ export default function HomeScreen() {
     if (activeTab === 'ALL' && selectedCategory === 'all') {
       const activeSections = getHomepageSections();
 
-      return (
+      const legacyAllContent = (
         <View className="pt-4 pb-20">
           {activeSections.map((sec: any, idx: number) => {
             const uniqueKey = `sec_${sec.key}_${idx}`;
             switch (sec.key) {
-              case 'banners':
-                return banners.length > 0 ? (
-                  <BannerCarousel key={uniqueKey} banners={banners} />
-                ) : (
-                  <View key={uniqueKey} style={{
-                    marginHorizontal: 16,
-                    marginVertical: 12,
-                    height: 145,
-                    backgroundColor: '#008B45',
-                    borderRadius: 14,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    overflow: 'hidden'
-                  }}>
-                    <Text style={{ color: '#fff', fontSize: 20, fontWeight: '700' }}>
-                      🛍️ BazarPeth Sale
-                    </Text>
-                    <Text style={{ color: 'rgba(255,255,255,0.8)', marginTop: 8 }}>
-                      Best deals in your neighborhood
-                    </Text>
-                    <TouchableOpacity 
-                      onPress={createSampleBanners}
-                      style={{ marginTop: 16, backgroundColor: '#fff', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}
-                    >
-                      <Text style={{ color: '#008B45', fontWeight: 'bold' }}>Create Sample Banners</Text>
-                    </TouchableOpacity>
+              case 'banners': {
+                const dynamicAllBanner = tabLayout?.heroBanner;
+                const dynamicAllBanners = tabLayout?.heroBanners;
+                const heroSlides = tabLayout?.heroSlides || (tabLayout as any)?.slides;
+                const categoryStories = tabLayout?.categoryStories || (tabLayout as any)?.stories;
+                const exploreCatData = tabLayout?.exploreCategories;
+                const exploreCategoriesList: any[] = Array.isArray(exploreCatData)
+                  ? exploreCatData
+                  : exploreCatData?.items || [];
+                const exploreHeaderTitle = (!Array.isArray(exploreCatData) && exploreCatData?.sectionTitle) || tabLayout?.exploreTitle || 'Explore Categories';
+
+                return (
+                  <View key={uniqueKey}>
+                    {/* 1. Multi-Banner (Up to 10 Slides) Header Carousel */}
+                    {heroSlides && Array.isArray(heroSlides) && heroSlides.length > 0 ? (
+                      <HeaderBannerCarousel slides={heroSlides} />
+                    ) : dynamicAllBanner ? (
+                      <HeaderBannerCarousel slides={[dynamicAllBanner]} />
+                    ) : dynamicAllBanners && dynamicAllBanners.length > 0 ? (
+                      <HeaderBannerCarousel slides={dynamicAllBanners} />
+                    ) : banners.length > 0 ? (
+                      <BannerCarousel banners={banners} />
+                    ) : (
+                      <View style={{
+                        marginHorizontal: 16,
+                        marginVertical: 12,
+                        height: 145,
+                        backgroundColor: '#008B45',
+                        borderRadius: 14,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        overflow: 'hidden'
+                      }}>
+                        <Text style={{ color: '#fff', fontSize: 20, fontWeight: '700' }}>
+                          🛍️ BazarPeth Sale
+                        </Text>
+                        <Text style={{ color: 'rgba(255,255,255,0.8)', marginTop: 8 }}>
+                          Best deals in your neighborhood
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* 2. Category Stories Carousel */}
+                    {categoryStories && Array.isArray(categoryStories) && categoryStories.length > 0 && (
+                      <CategoryStories stories={categoryStories} />
+                    )}
+
+                    {/* 3. Explore Categories Grid */}
+                    {exploreCategoriesList.length > 0 && (
+                      <ExploreCategoriesGrid items={exploreCategoriesList} title={exploreHeaderTitle} />
+                    )}
+
+                    {/* 4. Universal SDUI Dynamic Blocks */}
+                    {tabLayout?.blocks && Array.isArray(tabLayout.blocks) && tabLayout.blocks.length > 0 && (
+                      <UniversalSDUIRenderer blocks={tabLayout.blocks} cardShapeSettings={tabLayout.cardShapeSettings} />
+                    )}
                   </View>
                 );
+              }
               case 'trust_badges':
                 return <TrustBadges key={uniqueKey} />;
               case 'flash_deals':
@@ -1718,32 +2031,77 @@ export default function HomeScreen() {
                   </View>
                 ) : null;
               case 'all_products':
-                return (
-                  <View key={uniqueKey}>
-                    <View className="px-5 mt-6 mb-2 flex-row justify-between items-center">
-                      <Text className="text-xl font-black text-[#1C1C1C]">All Products</Text>
-                    </View>
-                    <View className="px-5 flex-row justify-between">
-                      {products.length === 0 ? (
-                         <Text className="text-zinc-500 w-full text-center py-10">No products found</Text>
-                       ) : (
-                         <>
-                           <View style={{ width: '48%' }}>
-                             {products.filter((_, i) => i % 2 === 0).map(p => <ProductCard key={p.id} product={p} />)}
-                           </View>
-                           <View style={{ width: '48%' }}>
-                             {products.filter((_, i) => i % 2 !== 0).map(p => <ProductCard key={p.id} product={p} />)}
-                           </View>
-                         </>
-                       )}
-                    </View>
-                  </View>
-                );
+                return null;
               default:
                 return null;
             }
           })}
+
+          {/* Guaranteed All Products 2-Column Grid */}
+          <View style={{ paddingHorizontal: 16, marginTop: 12, paddingBottom: 40 }}>
+            <View style={{ marginBottom: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ fontSize: 18, fontFamily: 'Poppins_700Bold', color: '#0F172A' }}>
+                All Products ({filteredProducts.length})
+              </Text>
+              <Text style={{ fontSize: 11, fontFamily: 'Poppins_600SemiBold', color: '#008B45' }}>
+                ⚡ Fast Local Delivery
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              {filteredProducts.length === 0 ? (
+                <Text style={{ textAlign: 'center', width: '100%', color: '#64748B', paddingVertical: 20, fontFamily: 'Poppins_500Medium' }}>
+                  No products found
+                </Text>
+              ) : (
+                <>
+                  <View style={{ width: '48%' }}>
+                    {filteredProducts.filter((_, i) => i % 2 === 0).map(p => <ProductCard key={p.id} product={p} />)}
+                  </View>
+                  <View style={{ width: '48%' }}>
+                    {filteredProducts.filter((_, i) => i % 2 !== 0).map(p => <ProductCard key={p.id} product={p} />)}
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
         </View>
+      );
+
+      const allProductsFooter = (
+        <View style={{ paddingHorizontal: 16, marginTop: 16, paddingBottom: 40 }}>
+          <View style={{ marginBottom: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ fontSize: 18, fontFamily: 'Poppins_700Bold', color: '#0F172A' }}>
+              All Products ({filteredProducts.length})
+            </Text>
+            <Text style={{ fontSize: 11, fontFamily: 'Poppins_600SemiBold', color: '#008B45' }}>
+              ⚡ Fast Local Delivery
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            {filteredProducts.length === 0 ? (
+              <Text style={{ textAlign: 'center', width: '100%', color: '#64748B', paddingVertical: 20, fontFamily: 'Poppins_500Medium' }}>
+                No products found
+              </Text>
+            ) : (
+              <>
+                <View style={{ width: '48%' }}>
+                  {filteredProducts.filter((_, i) => i % 2 === 0).map(p => <ProductCard key={p.id} product={p} />)}
+                </View>
+                <View style={{ width: '48%' }}>
+                  {filteredProducts.filter((_, i) => i % 2 !== 0).map(p => <ProductCard key={p.id} product={p} />)}
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      );
+
+      return (
+        <DynamicPageBuilder
+          pageId="home_all"
+          fallback={legacyAllContent}
+          footer={allProductsFooter}
+        />
       );
     }
 
@@ -1753,103 +2111,137 @@ export default function HomeScreen() {
       (b: any) => b.targetTab === activeTab || b.category === activeTab || b.placement === activeTab
     );
 
-    return (
-      <View style={{ paddingTop: 0, paddingBottom: 80, backgroundColor: '#FAFAFA' }}>
-        {/* ── CONTINUOUS THEME BACKGROUND SECTION (Wraps Hero Banner + Sub-Category Promo Tiles) ── */}
-        <LinearGradient
-          colors={theme.gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{
-            paddingTop: 16,
-            paddingBottom: 24,
-            borderBottomLeftRadius: 28,
-            borderBottomRightRadius: 28,
-            marginBottom: 20,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.1,
-            shadowRadius: 10,
-            elevation: 4,
-          }}
-        >
-          {/* 1. Hero Banner */}
-          <View style={{ paddingHorizontal: 16, marginBottom: 18 }}>
-            {tabSpecificBanners.length > 0 ? (
-              <BannerCarousel banners={tabSpecificBanners} />
-            ) : (
-              <View
-                style={{
-                  width: '100%',
-                  borderRadius: 18,
-                  padding: 18,
-                  backgroundColor: 'rgba(255,255,255,0.15)',
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.25)',
-                  overflow: 'hidden',
-                  position: 'relative',
-                }}
-              >
-                <View style={{ width: '65%', zIndex: 2 }}>
-                  <View style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, alignSelf: 'flex-start', marginBottom: 8 }}>
-                    <Text style={{ color: theme.accent, fontSize: 10, fontFamily: 'Poppins_700Bold' }}>
-                      {theme.bannerBadgeText}
-                    </Text>
-                  </View>
-                  <Text style={{ color: '#FFFFFF', fontSize: 18, fontFamily: 'Poppins_700Bold', lineHeight: 24, marginBottom: 4 }}>
-                    {theme.defaultBannerTitle}
-                  </Text>
-                  <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 11, fontFamily: 'Poppins_500Medium', marginBottom: 14 }}>
-                    {theme.defaultBannerSub}
-                  </Text>
-                  <TouchableOpacity
-                    style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, alignSelf: 'flex-start' }}
-                    onPress={() => setSelectedCategory('all')}
-                  >
-                    <Text style={{ color: theme.accent, fontSize: 11, fontFamily: 'Poppins_700Bold' }}>
-                      Shop Now →
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <Image
-                  source={{ uri: theme.defaultBannerImage }}
-                  style={{
-                    position: 'absolute',
-                    right: -10,
-                    bottom: -10,
-                    width: 140,
-                    height: 140,
-                    borderRadius: 14,
-                    opacity: 0.9,
-                  }}
-                  resizeMode="cover"
-                />
-              </View>
-            )}
+    // Dynamic Hero Banner & Explore Categories from Firestore (app_homepage_layout) with theme fallbacks
+    const dynamicHeroBanner = tabLayout?.heroBanner;
+    const dynamicHeroBanners = tabLayout?.heroBanners;
+
+    // Explore Categories schema from Admin Panel: either { sectionTitle, sectionSubtitle, items: [...] } or direct Array [...]
+    const exploreCatData = tabLayout?.exploreCategories;
+    const exploreCategoriesList: any[] = Array.isArray(exploreCatData)
+      ? exploreCatData
+      : exploreCatData?.items || tabLayout?.subCategories || theme.subCategories || [];
+    const exploreHeaderTitle = (!Array.isArray(exploreCatData) && exploreCatData?.sectionTitle) || tabLayout?.exploreTitle || `Explore ${theme.label} Categories`;
+    const exploreHeaderSubtitle = (!Array.isArray(exploreCatData) && exploreCatData?.sectionSubtitle) || '';
+    const curatedHeaderTitle = tabLayout?.curatedTitle || theme.curatedTitle || 'Offers Curated For You';
+    const emptyTitle = tabLayout?.emptyStateTitle || theme.emptyStateTitle;
+    const emptySub = tabLayout?.emptyStateSub || theme.emptyStateSub;
+    const emptyIcon = tabLayout?.emptyEmoji || theme.emptyEmoji;
+
+    const bannerBadge = dynamicHeroBanner?.tag || dynamicHeroBanner?.badge || dynamicHeroBanner?.badgeText || theme.bannerBadgeText;
+    const bannerTitle = dynamicHeroBanner?.title || theme.defaultBannerTitle;
+    const bannerSub = dynamicHeroBanner?.subtitle || (dynamicHeroBanner as any)?.description || theme.defaultBannerSub;
+    const bannerImg = dynamicHeroBanner?.imageUrl || dynamicHeroBanner?.image || theme.defaultBannerImage;
+    const bannerCta = dynamicHeroBanner?.buttonText || dynamicHeroBanner?.ctaText || 'Shop Now →';
+    const bannerLink = dynamicHeroBanner?.buttonLink || dynamicHeroBanner?.link || dynamicHeroBanner?.targetCategory;
+    const bannerBg = dynamicHeroBanner?.bgColor;
+    const bannerTextColor = dynamicHeroBanner?.textColor || '#FFFFFF';
+
+    const legacyTabContent = (
+      <View style={{ paddingTop: 0, paddingBottom: 80, backgroundColor: theme.gradient[0] }}>
+        {/* ── 1. THEME TOP BAR (Search Bar + Sub-category Pills matching Zepto Super Mall) ── */}
+        <View style={{ paddingTop: 6, paddingBottom: 12, backgroundColor: theme.gradient[0] }}>
+          {/* Integrated Search Bar inside theme background */}
+          <View style={{ paddingHorizontal: 14, marginBottom: 10 }}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => navigation.navigate('Search')}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#FFFFFF',
+                borderRadius: 14,
+                paddingHorizontal: 12,
+                paddingVertical: 9,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 4,
+                elevation: 3,
+                gap: 8,
+              }}
+            >
+              <HugeIcon icon={Search02Icon} size={18} color="#64748B" />
+              <Text style={{ flex: 1, fontSize: 12, color: '#64748B', fontFamily: 'Poppins_400Regular' }}>
+                {activeTab === 'WOMEN' ? 'Search for "Saree, Kurti, Western, Heels"...' :
+                 activeTab === 'MEN' ? 'Search for "Shirts, Kurta, Shoes, Watches"...' :
+                 activeTab === 'KIDS' ? 'Search for "Toys, Baby Wear, Games"...' :
+                 activeTab === 'BEAUTY' ? 'Search for "Lipstick, Serum, Perfumes"...' :
+                 activeTab === 'GROCERIES' ? 'Search for "Milk, Atta, Ghee, Vegetables"...' :
+                 activeTab === 'ELECTRONICS' ? 'Search for "Earbuds, Smartwatch, Charger"...' :
+                 'Search for "Gift for brother, Kurti, Groceries"...'}
+              </Text>
+              <TouchableOpacity onPress={() => setIsCameraModalOpen(true)}>
+                <Text style={{ fontSize: 16 }}>📸</Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
           </View>
 
-          {/* 2. Sub-Category Promotional Discount Tiles (Swiggy Instamart Style) */}
-          {theme.subCategories.length > 0 && (
-            <View>
-              <View style={{ paddingHorizontal: 16, marginBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontSize: 16, fontFamily: 'Poppins_700Bold', color: '#FFFFFF' }}>
-                  Explore {theme.label} Categories
-                </Text>
-                <Text style={{ fontSize: 11, fontFamily: 'Poppins_600SemiBold', color: 'rgba(255,255,255,0.85)' }}>
-                  {theme.subCategories.length} Categories
-                </Text>
-              </View>
+          {/* Subcategory Pills Row */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14, gap: 10 }}>
+            {exploreCategoriesList.map((sub: any, sIdx: number) => {
+              const subTitle = sub.title || sub.name || 'Category';
+              const subImg = sub.img || sub.imageUrl || 'https://via.placeholder.com/100';
 
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}>
-                {theme.subCategories.map((sub) => {
-                  // Calculate REAL discount percentage from products matching this subcategory
+              return (
+                <TouchableOpacity
+                  key={sub.id || `sub_pill_${sIdx}`}
+                  activeOpacity={0.88}
+                  onPress={() => handleSDUILink(sub.link || (sub.id ? `category/${sub.id}` : `category/${activeTab.toLowerCase()}`), navigation, subTitle)}
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+                    borderRadius: 20,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255, 255, 255, 0.28)',
+                  }}
+                >
+                  <Image source={{ uri: subImg }} style={{ width: 18, height: 18, borderRadius: 9 }} resizeMode="cover" />
+                  <Text style={{ color: '#FFFFFF', fontSize: 11, fontFamily: 'Poppins_700Bold' }}>
+                    {subTitle}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* ── 2. CURVED WHITE SURFACE (Zepto Super Mall White Categories & Deals Sheet) ── */}
+        <View style={{
+          backgroundColor: '#F8FAFC',
+          borderTopLeftRadius: 28,
+          borderTopRightRadius: 28,
+          paddingTop: 18,
+          minHeight: 600,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.08,
+          shadowRadius: 6,
+          elevation: 4,
+        }}>
+          {/* Categories Grid (Zepto Glossy Tiles Style) */}
+          {exploreCategoriesList.length > 0 && (
+            <View style={{ paddingHorizontal: 16, marginBottom: 20 }}>
+              <Text style={{ fontSize: 17, fontFamily: 'Poppins_800ExtraBold', color: '#0F172A', marginBottom: 12 }}>
+                Categories
+              </Text>
+
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                {exploreCategoriesList.map((sub: any, subIdx: number) => {
+                  const subTitle = sub.title || sub.name || 'Category';
+                  const subImage = sub.imageUrl || sub.img || 'https://via.placeholder.com/200';
+                  
+                  // Calculate REAL discount percentage
                   const subProds = products.filter(p => {
                     const cat = (p.category || '').toLowerCase();
                     const subcat = (p.subcategory || '').toLowerCase();
                     const pName = (p.name || '').toLowerCase();
-                    const target = sub.id.toLowerCase();
-                    const targetName = sub.name.toLowerCase();
-                    return cat.includes(target) || subcat.includes(target) || pName.includes(targetName);
+                    const target = (sub.id || '').toLowerCase();
+                    const targetName = subTitle.toLowerCase();
+                    return cat.includes(target) || subcat.includes(target) || (targetName && pName.includes(targetName));
                   });
 
                   let maxDiscount = 0;
@@ -1862,68 +2254,83 @@ export default function HomeScreen() {
 
                   return (
                     <TouchableOpacity
-                      key={sub.id}
+                      key={sub.id || `sub_card_${subIdx}`}
                       activeOpacity={0.9}
-                      onPress={() => {
-                        const matchedProd = subProds[0];
-                        if (matchedProd) {
-                          navigation.navigate('ProductDetail', { productId: matchedProd.id });
-                        }
-                      }}
+                      onPress={() => handleSDUILink(sub.link || (sub.id ? `category/${sub.id}` : `category/${activeTab.toLowerCase()}`), navigation, subTitle)}
                       style={{
-                        width: 108,
-                        height: 135,
-                        borderRadius: 16,
+                        width: '31%',
+                        height: 120,
+                        borderRadius: 18,
                         backgroundColor: '#FFFFFF',
                         overflow: 'hidden',
+                        marginBottom: 12,
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: 6,
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
                         shadowColor: '#000',
                         shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.15,
+                        shadowOpacity: 0.06,
                         shadowRadius: 4,
-                        elevation: 3,
-                        position: 'relative',
+                        elevation: 2,
                       }}
                     >
-                      {/* REAL Discount Badge Overlay (only shown if real discount exists in products) */}
-                      {maxDiscount > 0 && (
-                        <View style={{
-                          position: 'absolute',
-                          top: 6,
-                          left: 6,
-                          backgroundColor: '#DC2626',
-                          paddingHorizontal: 6,
-                          paddingVertical: 2,
-                          borderRadius: 6,
-                          zIndex: 3,
-                        }}>
-                          <Text style={{ color: '#FFFFFF', fontSize: 9, fontFamily: 'Poppins_700Bold' }}>
-                            UP TO {maxDiscount}% OFF
-                          </Text>
-                        </View>
-                      )}
-
-                      {/* Tile Product Image */}
-                      <View style={{ width: '100%', height: 88, backgroundColor: '#F8FAFC' }}>
+                      {/* Product Image */}
+                      <View style={{ width: '100%', height: 75, borderRadius: 14, overflow: 'hidden', backgroundColor: '#F1F5F9' }}>
                         <Image
-                          source={{ uri: sub.img }}
+                          source={{ uri: subImage }}
                           style={{ width: '100%', height: '100%' }}
                           resizeMode="cover"
                         />
                       </View>
 
-                      {/* Tile Label */}
-                      <View style={{ paddingHorizontal: 6, paddingVertical: 6, justifyContent: 'center', alignItems: 'center', height: 47, backgroundColor: '#FFFFFF' }}>
-                        <Text style={{ fontSize: 11, fontFamily: 'Poppins_700Bold', color: '#1E293B', textAlign: 'center', lineHeight: 14 }} numberOfLines={2}>
-                          {sub.name}
+                      {/* Label & Tag */}
+                      <View style={{ width: '100%', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 10, fontFamily: 'Poppins_700Bold', color: '#1E293B', textAlign: 'center' }} numberOfLines={1}>
+                          {subTitle}
                         </Text>
+                        {maxDiscount > 0 ? (
+                          <Text style={{ fontSize: 8.5, fontFamily: 'Poppins_800ExtraBold', color: '#DC2626' }}>
+                            UP TO {maxDiscount}% OFF
+                          </Text>
+                        ) : null}
                       </View>
                     </TouchableOpacity>
                   );
                 })}
-              </ScrollView>
+              </View>
             </View>
           )}
-        </LinearGradient>
+
+          {/* Dynamic Hero Banner / Slides */}
+          {tabLayout?.heroSlides && Array.isArray(tabLayout.heroSlides) && tabLayout.heroSlides.length > 0 ? (
+            <View style={{ marginBottom: 16 }}>
+              <HeaderBannerCarousel slides={tabLayout.heroSlides} fallbackBg={theme.gradient[0]} />
+            </View>
+          ) : dynamicHeroBanner ? (
+            <View style={{ marginBottom: 16 }}>
+              <HeaderBannerCarousel slides={[dynamicHeroBanner]} fallbackBg={theme.gradient[0]} />
+            </View>
+          ) : dynamicHeroBanners && dynamicHeroBanners.length > 0 ? (
+            <View style={{ marginBottom: 16 }}>
+              <HeaderBannerCarousel slides={dynamicHeroBanners} fallbackBg={theme.gradient[0]} />
+            </View>
+          ) : tabSpecificBanners.length > 0 ? (
+            <View style={{ marginBottom: 16 }}>
+              <BannerCarousel banners={tabSpecificBanners} />
+            </View>
+          ) : null}
+
+        {/* Dynamic Category Stories for this Tab */}
+        {tabLayout?.categoryStories && Array.isArray(tabLayout.categoryStories) && tabLayout.categoryStories.length > 0 && (
+          <CategoryStories stories={tabLayout.categoryStories} />
+        )}
+
+        {/* Dynamic SDUI Blocks for this Tab */}
+        {tabLayout?.blocks && Array.isArray(tabLayout.blocks) && tabLayout.blocks.length > 0 && (
+          <UniversalSDUIRenderer blocks={tabLayout.blocks} cardShapeSettings={tabLayout.cardShapeSettings} />
+        )}
 
         {/* ── 3. OFFERS CURATED FOR YOU SECTION ── */}
         {currentTabProducts.length > 0 && (
@@ -1931,7 +2338,7 @@ export default function HomeScreen() {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 12 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Text style={{ fontSize: 18, fontFamily: 'Poppins_700Bold', color: '#0F172A', marginRight: 8 }}>
-                  Offers Curated For You
+                  {curatedHeaderTitle}
                 </Text>
                 <View style={{ backgroundColor: theme.accent, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
                   <Text style={{ color: '#FFFFFF', fontSize: 10, fontFamily: 'Poppins_700Bold' }}>DEALS</Text>
@@ -1949,11 +2356,42 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* ── 4. ALL TAB COLLECTION MASONRY GRID OR EMPTY STATE ── */}
-        <View style={{ paddingHorizontal: 16 }}>
-          <Text style={{ fontSize: 16, fontFamily: 'Poppins_700Bold', color: '#0F172A', marginBottom: 12 }}>
-            All {theme.label} Collection ({currentTabProducts.length})
-          </Text>
+        {/* ── 4. TAB-ANCHORED LIVE PRODUCTS CATALOG ── */}
+        <View style={{ paddingHorizontal: 16, marginTop: 8 }}>
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 14,
+            paddingVertical: 10,
+            paddingHorizontal: 14,
+            backgroundColor: '#FFFFFF',
+            borderRadius: 14,
+            borderLeftWidth: 4,
+            borderLeftColor: theme.accent,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.06,
+            shadowRadius: 3,
+            elevation: 2,
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: 18 }}>{theme.icon}</Text>
+              <View>
+                <Text style={{ fontSize: 15, fontFamily: 'Poppins_700Bold', color: '#0F172A' }}>
+                  {theme.label} Products ({currentTabProducts.length})
+                </Text>
+                <Text style={{ fontSize: 10, fontFamily: 'Poppins_500Medium', color: '#64748B' }}>
+                  Showing all verified local stores in {theme.label}
+                </Text>
+              </View>
+            </View>
+            <View style={{ backgroundColor: theme.bgLight || '#F1F5F9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+              <Text style={{ fontSize: 11, fontFamily: 'Poppins_700Bold', color: theme.accent }}>
+                ⚡ Fast Delivery
+              </Text>
+            </View>
+          </View>
 
           {currentTabProducts.length === 0 ? (
             <View style={{
@@ -1971,12 +2409,12 @@ export default function HomeScreen() {
               elevation: 2,
               marginVertical: 12,
             }}>
-              <Text style={{ fontSize: 48, marginBottom: 12 }}>{theme.emptyEmoji}</Text>
+              <Text style={{ fontSize: 48, marginBottom: 12 }}>{emptyIcon}</Text>
               <Text style={{ fontSize: 16, fontFamily: 'Poppins_700Bold', color: '#1E293B', textAlign: 'center', marginBottom: 6 }}>
-                {theme.emptyStateTitle}
+                {emptyTitle}
               </Text>
               <Text style={{ fontSize: 12, fontFamily: 'Poppins_500Medium', color: '#64748B', textAlign: 'center', marginBottom: 18, lineHeight: 18 }}>
-                {theme.emptyStateSub}
+                {emptySub}
               </Text>
               <TouchableOpacity
                 onPress={() => handleTabChange('ALL')}
@@ -2004,6 +2442,71 @@ export default function HomeScreen() {
           )}
         </View>
       </View>
+    </View>
+  );
+
+    const categoryProductsFooter = (
+      <View style={{ paddingHorizontal: 16, marginTop: 16, paddingBottom: 40 }}>
+        <Text style={{ fontSize: 16, fontFamily: 'Poppins_700Bold', color: '#0F172A', marginBottom: 12 }}>
+          All {theme.label} Collection ({currentTabProducts.length})
+        </Text>
+
+        {currentTabProducts.length === 0 ? (
+          <View style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 20,
+            padding: 28,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 1,
+            borderColor: '#E2E8F0',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 6,
+            elevation: 2,
+            marginVertical: 12,
+          }}>
+            <Text style={{ fontSize: 48, marginBottom: 12 }}>{emptyIcon}</Text>
+            <Text style={{ fontSize: 16, fontFamily: 'Poppins_700Bold', color: '#1E293B', textAlign: 'center', marginBottom: 6 }}>
+              {emptyTitle}
+            </Text>
+            <Text style={{ fontSize: 12, fontFamily: 'Poppins_500Medium', color: '#64748B', textAlign: 'center', marginBottom: 18, lineHeight: 18 }}>
+              {emptySub}
+            </Text>
+            <TouchableOpacity
+              onPress={() => handleTabChange('ALL')}
+              style={{
+                backgroundColor: theme.accent,
+                paddingHorizontal: 20,
+                paddingVertical: 10,
+                borderRadius: 25,
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontFamily: 'Poppins_700Bold', fontSize: 12 }}>
+                Browse All Products →
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <View style={{ width: '48%' }}>
+              {currentTabProducts.filter((_, i) => i % 2 === 0).map(p => <ProductCard key={p.id} product={p} />)}
+            </View>
+            <View style={{ width: '48%' }}>
+              {currentTabProducts.filter((_, i) => i % 2 !== 0).map(p => <ProductCard key={p.id} product={p} />)}
+            </View>
+          </View>
+        )}
+      </View>
+    );
+
+    return (
+      <DynamicPageBuilder
+        pageId={`home_${activeTab.toLowerCase()}`}
+        fallback={legacyTabContent}
+        footer={categoryProductsFooter}
+      />
     );
   };
 
@@ -2017,40 +2520,90 @@ export default function HomeScreen() {
     );
   }
 
+  const currentTopSlide = headerTopSlides[activeTopIndex] || headerTopSlides[0] || tabLayout?.heroBanner || (tabLayout?.heroSlides && tabLayout.heroSlides[0]) || heroAd;
+  const rawTopMedia = (
+    currentTopSlide?.videoUrl || 
+    currentTopSlide?.video || 
+    currentTopSlide?.mediaUrl || 
+    currentTopSlide?.bgUrl || 
+    currentTopSlide?.url || 
+    currentTopSlide?.imageUrl || 
+    currentTopSlide?.image || 
+    currentTopSlide?.src || 
+    (currentTopSlide?.mediaType === 'video' ? (currentTopSlide?.src || currentTopSlide?.imageUrl) : null) || 
+    heroAd?.bgUrl || 
+    tabLayout?.heroBanner?.videoUrl ||
+    tabLayout?.heroBanner?.imageUrl ||
+    'https://www.shutterstock.com/shutterstock/videos/4140539077/preview/stock-footage-black-friday-special-offer-animated-label-sale-video.webm'
+  ).trim();
+
+  const activeHeaderMedia = rawTopMedia.replace('media.giphy.com/media/', 'i.giphy.com/');
+  const activeHeaderYtId = getYoutubeIdFromUrl(activeHeaderMedia);
+  const activeHeaderIsVideo = Boolean(
+    activeHeaderYtId ||
+    currentTopSlide?.mediaType === 'video' ||
+    currentTopSlide?.type === 'video' ||
+    currentTopSlide?.bgType === 'video' ||
+    Boolean(currentTopSlide?.videoUrl) ||
+    Boolean(currentTopSlide?.video) ||
+    Boolean(tabLayout?.heroBanner?.videoUrl) ||
+    /\.(mp4|webm|mov|m4v|ogv)(\?.*)?$/i.test(activeHeaderMedia) ||
+    activeHeaderMedia.includes('shutterstock.com/video') ||
+    activeHeaderMedia.includes('shutterstock.com/shutterstock/videos') ||
+    activeHeaderMedia.includes('picdn.net/shutterstock/videos') ||
+    activeHeaderMedia.includes('pexels.com/video') ||
+    activeHeaderMedia.includes('pixabay.com/videos')
+  );
+
   return (
-    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF', minHeight: '100%' }}>
       <Animated.View style={{
         position: 'absolute',
         top: 0,
         left: 0,
         right: 0,
         height: headerHeight,
-        backgroundColor: heroAd?.bgType ? 'transparent' : headerBackgroundColor,
-        borderBottomLeftRadius: 35,
-        borderBottomRightRadius: 35,
+        backgroundColor: '#1D58EE',
+        borderBottomLeftRadius: headerBorderRadius,
+        borderBottomRightRadius: headerBorderRadius,
         overflow: 'hidden',
-        zIndex: 10,
+        zIndex: 999,
+        elevation: 999,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: headerShadowOpacity,
+        shadowRadius: 8,
       }}>
-        {heroAd?.bgType === 'video' && heroAd?.bgUrl ? (
-          <HeroVideoBackground source={heroAd.bgUrl} />
-        ) : null}
-        {heroAd?.bgType === 'lottie' && heroAd?.bgUrl ? (
-          <LottieView
+        {/* Solid vibrant background so the curved shape NEVER flashes white during buffering */}
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: headerBackgroundColor || '#1D58EE' }]} />
+
+        {/* 🎬 100% FULL-CONTAINER SHAPE ANIMATED VIDEO OR MEDIA BACKGROUND */}
+        {activeHeaderMedia ? (
+          <View style={StyleSheet.absoluteFill}>
+            <BannerUniversalMedia
+              source={activeHeaderMedia}
+              isVideo={activeHeaderIsVideo}
+              style={StyleSheet.absoluteFill}
+            />
+            {/* Subtle scrim for crystal-clear readability of location & search bar */}
+            <LinearGradient
+              colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.25)']}
+              style={StyleSheet.absoluteFill}
+            />
+          </View>
+        ) : heroAd?.bgType === 'lottie' && heroAd?.bgUrl ? (
+          <SafeLottieView
             source={{ uri: heroAd.bgUrl }}
             autoPlay
             loop
             resizeMode="cover"
             style={StyleSheet.absoluteFill}
           />
-        ) : null}
-        {heroAd?.bgType === 'animated_gradient' && (heroAd?.gradientColors || heroAd?.bgColors) ? (
+        ) : heroAd?.bgType === 'animated_gradient' && (heroAd?.gradientColors || heroAd?.bgColors) ? (
           <AnimatedGradientBackground colors={heroAd.gradientColors || heroAd.bgColors} />
         ) : null}
-        {!heroAd?.bgType ? (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: headerBackgroundColor }]} />
-        ) : null}
 
-        <SafeAreaView edges={['top']} style={{ flex: 1 }}>
+        <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: 'transparent' }}>
           {/* Static Top Controls (Location & Search Bar) with 12px Horizontal Padding */}
           <View style={{ paddingHorizontal: 12 }}>
             {/* ── STATIC HEADER CONTENT (Location & Search Bar) ── */}
@@ -2078,29 +2631,51 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            {/* Unified Search & Smart Bar Scanner */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 12 }}>
+            {/* Unified Search & Hot Deals Action */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 10 }}>
               <TouchableOpacity 
                 activeOpacity={0.9}
                 onPress={() => navigation.navigate('Search')}
-                style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 12, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, height: 48, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 }}
+                style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 12, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, height: 48, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 }}
               >
                 <HugeIcon icon={Search02Icon} size={18} color="#A1A1AA" />
                 <View pointerEvents="none" style={{ flex: 1, marginLeft: 10, height: '100%', justifyContent: 'center' }}>
                   <TextInput
                     style={{ fontSize: 14, fontFamily: 'Poppins_400Regular', color: '#1C1C1C' }}
-                    placeholder={heroAd?.searchPlaceholder || 'Search "milk"'}
+                    placeholder={heroAd?.searchPlaceholder || 'Search "milk", "kurta", "butter"...'}
                     placeholderTextColor="#A1A1AA"
                     editable={false}
                   />
                 </View>
-                <TouchableOpacity style={{ borderLeftWidth: 1, borderLeftColor: '#E4E4E7', paddingLeft: 12 }}>
-                   <HugeIcon icon={Camera02Icon} size={18} color="#1C1C1C" />
+                <TouchableOpacity
+                  onPress={() => setIsCameraModalOpen(true)}
+                  style={{ borderLeftWidth: 1, borderLeftColor: '#E4E4E7', paddingLeft: 10 }}
+                >
+                   <HugeIcon icon={Camera02Icon} size={20} color="#008B45" />
                 </TouchableOpacity>
               </TouchableOpacity>
 
-              <TouchableOpacity style={{ backgroundColor: 'rgba(0,102,51,0.4)', borderRadius: 12, width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#006633' }}>
-                <HugeIcon icon={QrCodeIcon} size={20} color="#FFFFFF" />
+              {/* ⚡ Hot Deals & Offers Button (Replaced Confusing QR Scanner) */}
+              <TouchableOpacity
+                onPress={() => navigation.navigate('CategoryProducts', { categoryId: 'men', categoryName: '🔥 Today Hot Deals' })}
+                style={{
+                  backgroundColor: '#FFD700',
+                  borderRadius: 12,
+                  width: 48,
+                  height: 48,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 3,
+                  elevation: 3,
+                }}
+              >
+                <HugeIcon icon={FlashIcon} size={20} color="#000000" fill="#000000" />
+                <View style={{ position: 'absolute', top: -3, right: -3, backgroundColor: '#EF4444', borderRadius: 6, paddingHorizontal: 4, paddingVertical: 1 }}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 8, fontFamily: 'Poppins_700Bold' }}>HOT</Text>
+                </View>
               </TouchableOpacity>
             </View>
           </View>
@@ -2115,8 +2690,8 @@ export default function HomeScreen() {
           }}>
               <Animated.FlatList
                 ref={flatListRef}
-                data={promoOffers}
-                keyExtractor={(item) => item.id}
+                data={headerTopSlides}
+                keyExtractor={(item, index) => item.id || `top_slide_${index}`}
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
@@ -2128,178 +2703,168 @@ export default function HomeScreen() {
                   { length: SCREEN_WIDTH, offset: SCREEN_WIDTH * index, index }
                 )}
                 renderItem={({ item }) => {
-                  const bannerImage = item.imageUrl || item.image;
-
                   const handleBannerPress = () => {
                     if (item.categoryId) {
                       navigation.navigate('CategoryProducts', { categoryId: item.categoryId, categoryName: item.title || 'Category' });
                     } else if (item.productId) {
                       navigation.navigate('ProductDetail', { productId: item.productId });
-                    } else if (item.link) {
-                      navigation.navigate('Search', { query: item.link });
+                    } else if (item.link || item.buttonLink || item.actionUrl) {
+                      handleSDUILink(item.link || item.buttonLink || item.actionUrl, navigation, item.title);
                     }
                   };
 
-                  if (bannerImage) {
-                    return (
-                      <View style={{
+                  const rawMedia = (
+                    item.videoUrl || 
+                    item.video || 
+                    item.mediaUrl || 
+                    item.url || 
+                    item.bgUrl || 
+                    item.imageUrl || 
+                    item.image || 
+                    item.mascotGifUrl || 
+                    item.gifUrl || 
+                    item.previewUrl || 
+                    item.src || 
+                    ''
+                  ).trim();
+
+                  const mediaSource = rawMedia.replace('media.giphy.com/media/', 'i.giphy.com/');
+                  const isVideo = Boolean(
+                    getYoutubeIdFromUrl(mediaSource) ||
+                    item.mediaType === 'video' || 
+                    item.type === 'video' || 
+                    item.bgType === 'video' ||
+                    Boolean(item.videoUrl) ||
+                    Boolean(item.video) ||
+                    /\.(mp4|webm|mov|m4v|ogv)(\?.*)?$/i.test(mediaSource) ||
+                    mediaSource.includes('shutterstock.com/video') ||
+                    mediaSource.includes('shutterstock.com/shutterstock/videos') ||
+                    mediaSource.includes('picdn.net/shutterstock/videos') ||
+                    mediaSource.includes('pexels.com/video') ||
+                    mediaSource.includes('pixabay.com/videos')
+                  );
+
+                  const isCleanAnimation = 
+                    item.displayLayout === 'clean_animation' || 
+                    item.hideOverlayContent === true ||
+                    item.showTextOverlay === false;
+
+                  return (
+                    <TouchableOpacity
+                      activeOpacity={0.95}
+                      onPress={handleBannerPress}
+                      style={{
                         width: SCREEN_WIDTH,
                         height: BANNER_HEIGHT,
-                        justifyContent: 'center',
+                        flexDirection: 'row',
                         alignItems: 'center',
-                      }}>
-                        <TouchableOpacity
-                          activeOpacity={0.9}
-                          onPress={handleBannerPress}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            overflow: 'hidden',
-                            backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                            position: 'relative',
-                          }}
-                        >
-                          {/* Container-level media wrapper: Clips static images, WebP animations, GIFs, videos, or Lottie edge-to-edge */}
-                          <View style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
-                            <SafeImage
-                              uri={bannerImage}
-                              style={{ width: '100%', height: '100%' }}
-                              resizeMode="cover"
-                            />
+                        paddingHorizontal: 16,
+                        justifyContent: 'space-between',
+                        backgroundColor: 'transparent',
+                      }}
+                    >
+                      {!isCleanAnimation && (item.title && item.title !== 'Banner') ? (
+                        <View style={{ flex: 1, paddingRight: 12, justifyContent: 'center' }}>
+                          {(item.badge || item.tag) ? (
+                            <View style={{
+                              backgroundColor: '#FFD700',
+                              paddingHorizontal: 8,
+                              paddingVertical: 2.5,
+                              borderRadius: 6,
+                              alignSelf: 'flex-start',
+                              marginBottom: 4,
+                            }}>
+                              <Text style={{ color: '#0F172A', fontSize: 9.5, fontFamily: 'Poppins_800ExtraBold', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                                {item.badge || item.tag}
+                              </Text>
+                            </View>
+                          ) : null}
+                          <Text style={{ color: '#FFFFFF', fontSize: 16, fontFamily: 'Poppins_800ExtraBold', marginBottom: 2, textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }} numberOfLines={2}>
+                            {item.title}
+                          </Text>
+                          {(item.desc || item.subtitle) ? (
+                            <Text style={{ color: 'rgba(255,255,255,0.95)', fontSize: 11, fontFamily: 'Poppins_500Medium', marginBottom: 8, textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }} numberOfLines={1}>
+                              {item.desc || item.subtitle}
+                            </Text>
+                          ) : null}
+                          <View
+                            style={{
+                              backgroundColor: '#FFD700',
+                              paddingHorizontal: 14,
+                              paddingVertical: 6,
+                              borderRadius: 20,
+                              alignSelf: 'flex-start',
+                              shadowColor: '#000',
+                              shadowOpacity: 0.3,
+                              shadowRadius: 3,
+                              elevation: 2,
+                            }}
+                          >
+                            <Text style={{ color: '#0F172A', fontFamily: 'Poppins_800ExtraBold', fontSize: 10.5 }}>
+                              {item.ctaText || item.buttonText || 'Shop Now →'}
+                            </Text>
                           </View>
+                        </View>
+                      ) : null}
 
-                          {/* Render title overlay only if title is provided and not generic default */}
-                          {(item.title && item.title !== 'Banner' && item.showTextOverlay === true) && (
-                            <LinearGradient
-                              colors={['transparent', 'rgba(0,0,0,0.65)']}
-                              style={{
-                                position: 'absolute',
-                                left: 0, right: 0, bottom: 0,
-                                padding: 12,
-                                borderRadius: 16,
-                                flexDirection: 'row',
-                                alignItems: 'flex-end',
-                                justifyContent: 'space-between',
-                              }}
-                            >
-                              <View style={{ flex: 1, paddingRight: 8 }}>
-                                {item.badge && (
-                                  <View style={{
-                                    backgroundColor: '#FFD700',
-                                    paddingHorizontal: 8,
-                                    paddingVertical: 2,
-                                    borderRadius: 4,
-                                    alignSelf: 'flex-start',
-                                    marginBottom: 4,
-                                  }}>
-                                    <Text style={{ color: '#008B45', fontSize: 9, fontFamily: 'Poppins_800ExtraBold', letterSpacing: 0.5 }}>
-                                      {item.badge}
-                                    </Text>
-                                  </View>
-                                )}
-                                <Text style={{ color: '#FFFFFF', fontSize: 16, fontFamily: 'Poppins_700Bold' }} numberOfLines={1}>
-                                  {item.title}
-                                </Text>
-                                {(item.desc || item.subtitle) && (
-                                  <Text style={{ color: 'rgba(255, 255, 255, 0.85)', fontSize: 11, fontFamily: 'Poppins_400Regular' }} numberOfLines={1}>
-                                    {item.desc || item.subtitle}
-                                  </Text>
-                                )}
-                              </View>
-                              {item.ctaText && (
-                                <View style={{
-                                  backgroundColor: '#FFD700',
-                                  paddingHorizontal: 12,
-                                  paddingVertical: 6,
-                                  borderRadius: 16,
-                                }}>
-                                  <Text style={{ color: '#008B45', fontFamily: 'Poppins_700Bold', fontSize: 11 }}>
-                                    {item.ctaText}
-                                  </Text>
-                                </View>
-                              )}
-                            </LinearGradient>
-                          )}
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  }
-
-                  // Fallback for text-only offers without an image
-                  return (
-                    <Animated.View style={{
-                      width: SCREEN_WIDTH,
-                      height: BANNER_HEIGHT,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      paddingHorizontal: 16,
-                      backgroundColor: item.bgColor || headerBackgroundColor,
-                    }}>
-                      <View style={{ flex: 1, paddingRight: 12 }}>
-                        {item.badge && (
-                          <View style={{
-                            backgroundColor: '#FFD700',
-                            paddingHorizontal: 8,
-                            paddingVertical: 3,
-                            borderRadius: 6,
-                            alignSelf: 'flex-start',
-                            marginBottom: 6,
-                          }}>
-                            <Text style={{ color: '#008B45', fontSize: 10, fontFamily: 'Poppins_800ExtraBold', letterSpacing: 1 }}>{item.badge}</Text>
-                          </View>
-                        )}
-                        <Text style={{ color: '#FFFFFF', fontSize: 22, fontFamily: 'Poppins_800ExtraBold', marginBottom: 3 }} numberOfLines={1}>
-                          {item.title}
-                        </Text>
-                        <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 13, fontFamily: 'Poppins_300Light', marginBottom: 12 }} numberOfLines={1}>
-                          {item.desc || item.subtitle || 'Shop our latest deals!'}
-                        </Text>
-                        <TouchableOpacity
-                          onPress={handleBannerPress}
-                          style={{
-                            backgroundColor: '#FFD700',
-                            paddingHorizontal: 16,
-                            paddingVertical: 8,
-                            borderRadius: 20,
-                            alignSelf: 'flex-start',
-                            flexDirection: 'row',
-                            alignItems: 'center'
-                          }}
-                        >
-                          <Text style={{ color: '#008B45', fontFamily: 'Poppins_700Bold', fontSize: 13 }}>{item.ctaText || 'Shop Now'}</Text>
-                        </TouchableOpacity>
-                      </View>
-                      <View style={{
-                        width: 80, height: 80,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        borderRadius: 12,
-                        overflow: 'hidden',
-                        backgroundColor: 'rgba(255,255,255,0.1)'
-                      }}>
-                        <Text style={{ fontSize: 60 }}>{item.icon || '🎉'}</Text>
-                      </View>
-                    </Animated.View>
+                      {item.displayLayout === 'split' && (
+                        <View style={{
+                          width: 80, height: 80,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          borderRadius: 16,
+                          overflow: 'hidden',
+                          backgroundColor: 'rgba(255,255,255,0.15)'
+                        }}>
+                          <Text style={{ fontSize: 44 }}>{item.icon || '🎉'}</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
                   );
                 }}
               />
             </Animated.View>
+
+            {/* Carousel Pagination Dots */}
+            {headerTopSlides.length > 1 && (
+              <View style={{
+                position: 'absolute',
+                bottom: 8,
+                left: 0,
+                right: 0,
+                flexDirection: 'row',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: 5,
+                zIndex: 20,
+              }}>
+                {headerTopSlides.map((_, i) => (
+                  <View
+                    key={i}
+                    style={{
+                      width: activeTopIndex === i ? 18 : 6,
+                      height: 5,
+                      borderRadius: 3,
+                      backgroundColor: activeTopIndex === i ? '#FFD700' : 'rgba(255,255,255,0.45)',
+                    }}
+                  />
+                ))}
+              </View>
+            )}
         </SafeAreaView>
       </Animated.View>
 
-      <View style={{ flex: 1, backgroundColor: '#FFFFFF', marginTop: 160, overflow: 'hidden' }}>
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
         <Animated.ScrollView 
           className="flex-1" 
           showsVerticalScrollIndicator={false} 
-          stickyHeaderIndices={[2]}
+          contentContainerStyle={{ paddingTop: TOTAL_HEADER_HEIGHT }}
           onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
           scrollEventThrottle={16}
         >
-          {/* Spacer to align content below expanded header */}
-          <View style={{ height: promoOffers.length > 0 ? (TOTAL_HEADER_HEIGHT - 160) : 0 }} />
           {/* ── CATEGORY ICONS ── */}
-          <View className="bg-white">
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: 16, marginTop: 16, paddingBottom: 8 }}>
+          <View className="bg-white" style={{ paddingTop: 12 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: 16, marginTop: 4, paddingBottom: 8 }}>
               {CATEGORIES.map((cat, idx) => (
                 <AnimatedCategoryIcon 
                   key={cat.id} 
@@ -2310,7 +2875,7 @@ export default function HomeScreen() {
               ))}
             </ScrollView>
           </View>
-          <View style={{ backgroundColor: '#111827' }}>
+          <View collapsable={false} renderToHardwareTextureAndroid={true} style={{ backgroundColor: '#0F172A' }}>
             <HomeTabBar activeTab={activeTab} onTabChange={handleTabChange} accentColor={TAB_THEMES[activeTab]?.accent} />
           </View>
           <Reanimated.View style={[{ flex: 1 }, animatedTabStyle]}>
@@ -2318,6 +2883,96 @@ export default function HomeScreen() {
           </Reanimated.View>
         </Animated.ScrollView>
       </View>
+
+      {/* ── CAMERA / PHOTO VISUAL SEARCH MODAL ── */}
+      <Modal
+        visible={isCameraModalOpen}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setIsCameraModalOpen(false)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}
+          activeOpacity={1}
+          onPress={() => setIsCameraModalOpen(false)}
+        >
+          <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
+            <View style={{ width: 40, height: 4, backgroundColor: '#CBD5E1', borderRadius: 2, alignSelf: 'center', marginBottom: 16 }} />
+            
+            <Text style={{ fontSize: 18, fontFamily: 'Poppins_700Bold', color: '#0F172A', textAlign: 'center' }}>
+              📷 Visual Product Search
+            </Text>
+            <Text style={{ fontSize: 13, fontFamily: 'Poppins_400Regular', color: '#64748B', textAlign: 'center', marginTop: 4, marginBottom: 20 }}>
+              Search for clothes, groceries, or gadgets by clicking a photo
+            </Text>
+
+            <View style={{ gap: 12 }}>
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#E8F5E9',
+                  padding: 16,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: '#C8E6C9',
+                  gap: 14,
+                }}
+                onPress={handleLaunchCamera}
+              >
+                <Text style={{ fontSize: 24 }}>📸</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontFamily: 'Poppins_700Bold', color: '#008B45' }}>Take a Photo</Text>
+                  <Text style={{ fontSize: 11, fontFamily: 'Poppins_400Regular', color: '#475569' }}>Snap any item, dress, or grocery label</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#F8FAFC',
+                  padding: 16,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  gap: 14,
+                }}
+                onPress={handleLaunchGallery}
+              >
+                <Text style={{ fontSize: 24 }}>🖼️</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontFamily: 'Poppins_700Bold', color: '#0F172A' }}>Choose from Gallery</Text>
+                  <Text style={{ fontSize: 11, fontFamily: 'Poppins_400Regular', color: '#64748B' }}>Upload saved screenshot or product photo</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Visual Search Processing Overlay */}
+      {isProcessingVisualSearch && (
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.7)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 999,
+        }}>
+          <ActivityIndicator size="large" color="#008B45" />
+          <Text style={{ color: '#FFFFFF', fontFamily: 'Poppins_700Bold', fontSize: 16, marginTop: 16 }}>
+            🔍 Scanning & Matching Products...
+          </Text>
+          <Text style={{ color: '#94A3B8', fontFamily: 'Poppins_400Regular', fontSize: 12, marginTop: 4 }}>
+            Finding best matching items in BazarPeth
+          </Text>
+        </View>
+      )}
     </View>
   );
 }

@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import React, { memo } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { TAB_THEMES } from '../config/tabThemes';
 
 interface HomeTabBarProps {
@@ -8,13 +8,26 @@ interface HomeTabBarProps {
   accentColor?: string;
 }
 
-const TABS = ['ALL', 'MEN', 'WOMEN', 'KIDS', 'BEAUTY'];
+const TABS = ['ALL', 'WOMEN', 'MEN', 'KIDS', 'BEAUTY', 'GROCERIES', 'ELECTRONICS'];
 
-export default function HomeTabBar({ activeTab, onTabChange, accentColor }: HomeTabBarProps) {
+const HomeTabBar = memo(function HomeTabBar({ activeTab, onTabChange }: HomeTabBarProps) {
+  const activeTheme = TAB_THEMES[activeTab] || TAB_THEMES.ALL;
+
   return (
-    <View style={{ backgroundColor: '#111827', paddingTop: 8, paddingBottom: 0 }}>
+    <View 
+      collapsable={false}
+      renderToHardwareTextureAndroid={true}
+      style={{
+        backgroundColor: '#0F172A',
+        paddingTop: 12,
+        paddingBottom: 0,
+      }}
+    >
       <ScrollView
         horizontal
+        nestedScrollEnabled={true}
+        overScrollMode="never"
+        removeClippedSubviews={false}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 12, alignItems: 'flex-end', gap: 8 }}
       >
@@ -22,43 +35,78 @@ export default function HomeTabBar({ activeTab, onTabChange, accentColor }: Home
           const isActive = activeTab === tab;
           const theme = TAB_THEMES[tab] || TAB_THEMES.ALL;
 
+          if (isActive) {
+            // Active Tab: Solid connected folder tab that flows seamlessly into the theme container below
+            return (
+              <TouchableOpacity
+                key={tab}
+                activeOpacity={0.95}
+                onPress={() => onTabChange(tab)}
+                style={{
+                  backgroundColor: theme.gradient[0],
+                  borderTopLeftRadius: 18,
+                  borderTopRightRadius: 18,
+                  borderBottomLeftRadius: 0,
+                  borderBottomRightRadius: 0,
+                  paddingHorizontal: 18,
+                  paddingTop: 10,
+                  paddingBottom: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: -3 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 6,
+                  elevation: 6,
+                }}
+              >
+                <Text style={{ fontSize: 18 }}>{theme.icon}</Text>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: '#FFFFFF',
+                    fontFamily: 'Poppins_800ExtraBold',
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  {tab}
+                </Text>
+              </TouchableOpacity>
+            );
+          }
+
+          // Inactive Tab: Clean, floating rounded pill badge
           return (
             <TouchableOpacity
               key={tab}
-              activeOpacity={0.85}
+              activeOpacity={0.8}
               onPress={() => onTabChange(tab)}
               style={{
-                backgroundColor: isActive ? theme.gradient[0] : 'rgba(255, 255, 255, 0.1)',
-                borderTopLeftRadius: isActive ? 16 : 14,
-                borderTopRightRadius: isActive ? 16 : 14,
-                borderBottomLeftRadius: 0,
-                borderBottomRightRadius: 0,
-                paddingHorizontal: isActive ? 18 : 14,
-                paddingTop: isActive ? 10 : 8,
-                paddingBottom: isActive ? 10 : 7,
+                backgroundColor: '#FFFFFF',
+                borderRadius: 20,
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                marginBottom: 6,
+                flexDirection: 'row',
                 alignItems: 'center',
-                justifyContent: 'center',
-                minWidth: isActive ? 78 : 68,
-                borderWidth: isActive ? 1 : 0,
-                borderColor: isActive ? 'rgba(255,255,255,0.3)' : 'transparent',
-                borderBottomWidth: 0,
-                shadowColor: isActive ? '#000' : 'transparent',
-                shadowOffset: { width: 0, height: -2 },
-                shadowOpacity: isActive ? 0.2 : 0,
-                shadowRadius: 4,
-                elevation: isActive ? 4 : 0,
+                gap: 5,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.1,
+                shadowRadius: 2,
+                elevation: 2,
               }}
             >
-              <Text style={{ fontSize: isActive ? 22 : 18, marginBottom: 2 }}>
-                {theme.icon}
-              </Text>
+              <Text style={{ fontSize: 15 }}>{theme.icon}</Text>
               <Text
                 style={{
-                  fontSize: isActive ? 12 : 10,
-                  color: isActive ? '#FFFFFF' : 'rgba(255, 255, 255, 0.75)',
-                  fontFamily: isActive ? 'Poppins_700Bold' : 'Poppins_600SemiBold',
-                  letterSpacing: 0.5,
-                  textAlign: 'center',
+                  fontSize: 11.5,
+                  color: '#334155',
+                  fontFamily: 'Poppins_700Bold',
+                  letterSpacing: 0.3,
                 }}
               >
                 {tab}
@@ -69,4 +117,7 @@ export default function HomeTabBar({ activeTab, onTabChange, accentColor }: Home
       </ScrollView>
     </View>
   );
-}
+});
+
+export default HomeTabBar;
+

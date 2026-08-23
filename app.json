@@ -1,11 +1,16 @@
 {
   "expo": {
-    "name": "BazarPeth",
+    "name": "Bazarpeth",
     "slug": "jhat-pat-mobile-app",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/bazarpeth_app_icon_dark_1024x1024.png",
     "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/bazarpeth_icon_card_light_bg.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
     "ios": {
       "supportsTablet": true
     },
@@ -20,7 +25,7 @@
       }
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/bazarpeth_favicon_32x32.png"
     },
     "runtimeVersion": {
       "policy": "appVersion"
@@ -38,9 +43,10 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/splash-icon.png",
+          "image": "./assets/bazarpeth_icon_card_light_bg.png",
           "resizeMode": "contain",
-          "backgroundColor": "#1E8A3C"
+          "backgroundColor": "#FFFFFF",
+          "imageWidth": 200
         }
       ],
       "expo-font",
@@ -53,7 +59,8 @@
         }
       ],
       "expo-image",
-      "expo-video"
+      "expo-video",
+      "./plugins/withKotlinJvmTarget"
     ]
   }
 }
