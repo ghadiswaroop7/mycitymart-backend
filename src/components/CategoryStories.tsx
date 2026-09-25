@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-nati
 import { useNavigation } from '@react-navigation/native';
 import SafeImage from './SafeImage';
 import { handleSDUILink } from '../utils/sduiNavigation';
+import { CATEGORY_FALLBACK_IMAGES } from '../utils/productImages';
 
 export interface CategoryStory {
   id?: string;
@@ -17,7 +18,7 @@ interface Props {
   stories?: CategoryStory[];
 }
 
-export default function CategoryStories({ stories = [] }: Props) {
+function CategoryStories({ stories = [] }: Props) {
   const navigation = useNavigation<any>();
 
   if (!stories || stories.length === 0) return null;
@@ -26,7 +27,9 @@ export default function CategoryStories({ stories = [] }: Props) {
     <View style={styles.container}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {stories.map((story, index) => {
-          const imageUri = story.imageUrl || story.image || 'https://via.placeholder.com/150';
+          const titleKey = (story.title || '').toLowerCase();
+          const fallback = Object.entries(CATEGORY_FALLBACK_IMAGES).find(([k]) => titleKey.includes(k))?.[1];
+          const imageUri = story.imageUrl || story.image || fallback;
           const link = story.link || (story.id ? `category/${story.id}` : 'category/women');
 
           return (
@@ -37,7 +40,7 @@ export default function CategoryStories({ stories = [] }: Props) {
               style={styles.storyItem}
             >
               <View style={styles.ringContainer}>
-                <SafeImage uri={imageUri} style={styles.storyImage} resizeMode="cover" />
+                <SafeImage uri={imageUri} style={styles.storyImage} resizeMode="cover" fallbackText={story.title} />
                 {story.tag ? (
                   <View style={styles.badge}>
                     <Text style={styles.badgeText}>{story.tag}</Text>
@@ -105,3 +108,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
+export default React.memo(CategoryStories);

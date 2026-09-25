@@ -26,6 +26,10 @@ export interface Product {
   shop_name?: string;
   seller?: string;
   vendor?: string;
+  city?: string;
+  cities?: string[];
+  area?: string;
   createdAt?: any;
   updatedAt?: any;
 }
+

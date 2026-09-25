@@ -7,6 +7,7 @@ import { getProducts } from '../services/firestoreService';
 import ProductCard from '../components/ProductCard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { doesProductBelongToCategory } from '../utils/productClassifier';
 
 export default function SearchScreen() {
   const route = useRoute<any>();
@@ -100,7 +101,7 @@ export default function SearchScreen() {
     }
 
     if (selectedCategory) {
-      results = results.filter(p => p.category?.toLowerCase() === selectedCategory.toLowerCase());
+      results = results.filter(p => doesProductBelongToCategory(p, selectedCategory));
     }
 
     if (selectedBrand) {

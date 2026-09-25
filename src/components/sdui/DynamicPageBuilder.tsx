@@ -1,69 +1,92 @@
 import React, { useRef, useEffect } from 'react';
 import { View, Text, Animated, Easing, StyleSheet } from 'react-native';
-import usePageLayout from '../../hooks/usePageLayout';
+import useServerDrivenScreen from '../../hooks/useServerDrivenScreen';
 import WidgetRenderer from './WidgetRenderer';
-import SDUIRenderer from './SDUIRenderer';
+import { LayoutBlock } from '../../contracts/sduiContracts';
 
 interface Props {
+  /** Screen or page identifier: 'home', 'home_all', 'category_women', etc. */
   pageId: string;
-  /** Optional fallback content to render when no SDUI blocks exist */
+  /** Optional city override for targeting */
+  city?: string;
+  /** Optional user segment override for targeting */
+  userSegment?: string;
+  /** Optional fallback content to render only if zero blocks exist */
   fallback?: React.ReactNode;
-  /** Optional footer content to render below SDUI blocks (e.g. All Products grid) */
+  /** Optional footer content to render below SDUI blocks */
   footer?: React.ReactNode;
+  /** Optional header content to render above SDUI blocks */
+  header?: React.ReactNode;
 }
 
 /**
- * DynamicPageBuilder
+ * DynamicPageBuilder (Server-Driven UI Engine)
  * 
- * Top-level SDUI component: given a pageId (e.g. "home_all"),
- * it fetches the layout blocks from Firestore and renders them
- * in order via WidgetRenderer.
- * 
- * Shows skeleton during loading. Falls back to `fallback` prop
- * when no SDUI data exists (allows legacy UI to render).
- * If `footer` is provided, it always renders below SDUI blocks.
+ * Architecture:
+ * - Single source of truth: Layout tree fetched from backend (published_pages/{pageId})
+ * - Versioned layout contracts: carries schemaVersion and skips unknown widget types
+ * - Targeting: filters by city, userSegment, appVersion
+ * - Cache + fallback: instant 0ms cached render, offline fallback to avoid blank screen
  */
-export default function DynamicPageBuilder({ pageId, fallback, footer }: Props) {
-  const { blocks, loading, error } = usePageLayout(pageId);
+export default function DynamicPageBuilder({
+  pageId,
+  city,
+  userSegment,
+  fallback,
+  footer,
+  header,
+}: Props) {
+  // Normalize pageId: 'home_all' maps to 'home'
+  const screenId = pageId === 'home_all' ? 'home' : pageId;
 
-  // ── Loading state ──
-  if (loading) {
+  const { layout, loading, refreshing, refresh } = useServerDrivenScreen({
+    screenId,
+    city,
+    userSegment,
+  });
+
+  const blocks: LayoutBlock[] = layout?.blocks || [];
+
+  // ── Loading state (only when no cache exists) ──
+  if (loading && blocks.length === 0) {
     return <SDUISkeletonLoader />;
   }
 
-  // ── No SDUI data → render legacy fallback ──
-  if (blocks.length === 0) {
-    if (fallback) return <>{fallback}</>;
-    return null;
+  // ── Empty state fallback ──
+  if (blocks.length === 0 && fallback) {
+    return <>{fallback}</>;
   }
 
-  // ── Render SDUI blocks + footer ──
+  // ── Render Server-Driven Blocks ──
   return (
-    <View>
-      <SDUIRenderer blocks={blocks} />
+    <View style={styles.container}>
+      {header}
+      {blocks.map((block) => (
+        <WidgetRenderer key={block.id} block={block} />
+      ))}
       {footer}
     </View>
   );
 }
 
 /**
- * Skeleton loader matching the app's existing shimmer style.
+ * Skeleton loader matching the app's shimmer style.
  */
 function SDUISkeletonLoader() {
-  const shimmer = useRef(new Animated.Value(0.4)).current;
+  const shimmer = useRef(new Animated.Value(0.35)).current;
 
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
         Animated.timing(shimmer, {
-          toValue: 1,
-          duration: 800,
+          toValue: 0.9,
+          duration: 750,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
         Animated.timing(shimmer, {
-          toValue: 0.4,
-          duration: 800,
+          toValue: 0.35,
+          duration: 750,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
@@ -73,119 +96,66 @@ function SDUISkeletonLoader() {
 
   return (
     <View style={skeletonStyles.container}>
-      {/* Trust badges skeleton */}
-      <View style={skeletonStyles.trustRow}>
-        {[1, 2, 3].map((i) => (
-          <View key={i} style={skeletonStyles.trustItem}>
-            <Animated.View style={[skeletonStyles.trustCircle, { opacity: shimmer }]} />
-            <Animated.View style={[skeletonStyles.trustLine, { opacity: shimmer }]} />
-          </View>
-        ))}
-      </View>
-
       {/* Banner skeleton */}
       <Animated.View style={[skeletonStyles.banner, { opacity: shimmer }]} />
 
-      {/* Section title skeleton */}
-      <Animated.View style={[skeletonStyles.titleBar, { opacity: shimmer }]} />
-
-      {/* Cards row skeleton */}
-      <View style={skeletonStyles.cardsRow}>
-        {[1, 2, 3].map((i) => (
-          <View key={i} style={skeletonStyles.cardWrap}>
-            <Animated.View style={[skeletonStyles.cardImage, { opacity: shimmer }]} />
-            <Animated.View style={[skeletonStyles.cardLine1, { opacity: shimmer }]} />
-            <Animated.View style={[skeletonStyles.cardLine2, { opacity: shimmer }]} />
-          </View>
-        ))}
-      </View>
-
-      {/* Grid skeleton */}
-      <View style={skeletonStyles.gridRow}>
+      {/* Categories skeleton */}
+      <View style={skeletonStyles.catRow}>
         {[1, 2, 3, 4].map((i) => (
-          <Animated.View key={i} style={[skeletonStyles.gridItem, { opacity: shimmer }]} />
+          <Animated.View key={i} style={[skeletonStyles.catCircle, { opacity: shimmer }]} />
         ))}
       </View>
+
+      {/* ETA Bar skeleton */}
+      <Animated.View style={[skeletonStyles.etaBar, { opacity: shimmer }]} />
+
+      {/* Boutique Arch skeleton */}
+      <Animated.View style={[skeletonStyles.archCard, { opacity: shimmer }]} />
     </View>
   );
 }
 
+const styles = StyleSheet.create({
+  container: {
+    width: '100%',
+  },
+});
+
 const skeletonStyles = StyleSheet.create({
   container: {
-    padding: 16,
-    gap: 20,
+    padding: 12,
   },
-  // Trust badges
-  trustRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  trustItem: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  trustCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#E5E7EB',
-  },
-  trustLine: {
-    width: 50,
-    height: 10,
-    borderRadius: 4,
-    backgroundColor: '#E5E7EB',
-  },
-  // Banner
   banner: {
-    height: 155,
-    borderRadius: 16,
-    backgroundColor: '#E5E7EB',
+    width: '100%',
+    height: 180,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 20,
+    marginBottom: 14,
   },
-  // Title bar
-  titleBar: {
-    width: 160,
-    height: 20,
-    borderRadius: 6,
-    backgroundColor: '#E5E7EB',
-  },
-  // Cards row
-  cardsRow: {
+  catRow: {
     flexDirection: 'row',
-    gap: 12,
+    justifyContent: 'space-between',
+    marginBottom: 14,
+    paddingHorizontal: 6,
   },
-  cardWrap: {
-    width: 155,
-    gap: 6,
-  },
-  cardImage: {
-    width: 155,
-    height: 120,
-    borderRadius: 12,
-    backgroundColor: '#E5E7EB',
-  },
-  cardLine1: {
-    width: 120,
-    height: 12,
-    borderRadius: 4,
-    backgroundColor: '#E5E7EB',
-  },
-  cardLine2: {
-    width: 80,
-    height: 12,
-    borderRadius: 4,
-    backgroundColor: '#E5E7EB',
-  },
-  // Grid
-  gridRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  gridItem: {
-    width: '47%',
-    height: 140,
+  catCircle: {
+    width: 68,
+    height: 68,
     borderRadius: 16,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#E2E8F0',
+  },
+  etaBar: {
+    width: '100%',
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: '#FED7AA',
+    marginBottom: 14,
+  },
+  archCard: {
+    width: '100%',
+    height: 160,
+    borderRadius: 24,
+    backgroundColor: '#CBD5E1',
+    marginBottom: 14,
   },
 });

@@ -73,8 +73,8 @@ export function handleSDUILink(link: string | undefined | null, navigation: any,
   }
   if (cleanLink === 'deals' || cleanLink === 'flash_sale' || cleanLink === 'offers') {
     navigation.navigate('CategoryProducts', {
-      categoryId: 'men',
-      categoryName: '🔥 Today Flash Deals & Offers',
+      categoryId: 'all',
+      categoryName: fallbackTitle || '🔥 Today Flash Deals & Offers',
     });
     return;
   }

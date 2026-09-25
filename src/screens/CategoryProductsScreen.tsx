@@ -14,13 +14,14 @@ import {
   Dimensions,
 } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { useDispatch, useSelector } from 'react-redux';
 import { db } from '../config/firebase';
 import { RootState } from '../store';
 import { addToCart, removeFromCart } from '../store/slices/cartSlice';
 import { toggleWishlist } from '../store/slices/wishlistSlice';
 import SafeImage from '../components/SafeImage';
+import { getProductImage } from '../utils/productImages';
 import BazarLoadingAnimation from '../components/BazarLoadingAnimation';
 import { HugeIcon } from '../components/HugeIcon';
 import {
@@ -64,103 +65,25 @@ export type EnhancedProduct = {
   subcategory?: string;
   isFastDelivery?: boolean;
   inStock?: boolean;
+  emoji?: string;
+  image?: string;
 };
 
-// Intelligent product category classifier to correctly handle messy or missing database categories
-export const classifyProduct = (p: { name?: string; category?: string; subCategory?: string; subcategory?: string }): string => {
-  const name = (p.name || '').toLowerCase();
-  const cat = (p.category || '').toLowerCase();
-  const sub = (p.subCategory || p.subcategory || '').toLowerCase();
-  const text = `${name} ${cat} ${sub}`;
-
-  // 1. Electronics & Gadgets
-  if (
-    cat === 'electronics' ||
-    text.includes('iphone') || text.includes('phone') || text.includes('mobile') ||
-    text.includes('airpods') || text.includes('earbuds') || text.includes('headphone') ||
-    text.includes('laptop') || text.includes('smartwatch') || text.includes('inverter split ac') ||
-    text.includes('refrigerator') || text.includes('wireless mouse') || text.includes('bluetooth') ||
-    text.includes('camera') || text.includes('snapdragon')
-  ) {
-    return 'electronics';
-  }
-
-  // 2. Women's Ethnic & Western Clothing
-  if (
-    text.includes('women') || text.includes('kurta') || text.includes('kurti') ||
-    text.includes('saree') || text.includes('lehenga') || text.includes('dupatta') ||
-    text.includes('anarkali') || text.includes('gown') || text.includes('lingerie') ||
-    text.includes('bra') || text.includes('panty') || text.includes('skirt') ||
-    text.includes('palazzo') || text.includes('jeggings')
-  ) {
-    if (text.includes('kurti') || text.includes('saree') || text.includes('lehenga') || text.includes('anarkali') || text.includes('kurta')) {
-      return 'kurti_saree_lehenga';
-    }
-    return 'women_western';
-  }
-
-  // 3. Men's Fashion & Clothing (Strict: must not be women's)
-  if (
-    text.includes('men') || text.includes('mens') || text.includes('boy') ||
-    text.includes('shirt') || text.includes('t-shirt') || text.includes('tshirt') ||
-    text.includes('trouser') || text.includes('jeans') || text.includes('polo') ||
-    text.includes('blazer') || text.includes('hoodie') || text.includes('jogger')
-  ) {
-    return 'men';
-  }
-
-  // 4. Kitchen & Cookware
-  if (
-    cat.includes('kitchen') ||
-    text.includes('kettle') || text.includes('kadai') || text.includes('cookware') ||
-    text.includes('pan') || text.includes('pot') || text.includes('cooker')
-  ) {
-    return 'home_kitchen';
-  }
-
-  // 5. Grocery & Daily Needs
-  if (
-    cat.includes('grocery') || cat.includes('dairy') || cat.includes('tobacco') || cat.includes('food') ||
-    text.includes('butter') || text.includes('rice') || text.includes('pasteurised') ||
-    text.includes('cigarette') || text.includes('atta') || text.includes('oil') || text.includes('biscuit')
-  ) {
-    return 'grocery';
-  }
-
-  // 6. Beauty & Personal Care
-  if (
-    cat.includes('personal care') || cat.includes('beauty') ||
-    text.includes('soap') || text.includes('shampoo') || text.includes('lotion') ||
-    text.includes('lipstick') || text.includes('perfume') || text.includes('serum')
-  ) {
-    return 'beauty';
-  }
-
-  // 7. Kids & Toys
-  if (text.includes('kids') || text.includes('baby') || text.includes('toy') || text.includes('toddler')) {
-    return 'kids_toys';
-  }
-
-  // 8. Bags & Footwear
-  if (text.includes('bag') || text.includes('shoe') || text.includes('sneaker') || text.includes('footwear') || text.includes('sandal')) {
-    return 'bags';
-  }
-
-  // 9. Watches
-  if (text.includes('watch') || text.includes('chronograph')) {
-    return 'watches';
-  }
-
-  return cat || 'general';
-};
+import {
+  classifyProduct,
+  normalizeCategoryKey,
+  doesProductBelongToCategory,
+  doesProductMatchSubcategory,
+} from '../utils/productClassifier';
 
 // Preset subcategories tailored per category
 const PRESET_SUBCATEGORIES: Record<string, string[]> = {
-  men: ['All', 'T-Shirts', 'Shirts', 'Combos', 'Trousers & Jeans', 'Footwear', 'Watches'],
+  men: ['All', 'T-Shirts', 'Shirts', 'Combos', 'Trousers & Jeans', 'Ethnic Wear', 'Footwear', 'Watches'],
   women: ['All', 'Kurtis', 'Sarees', 'Dresses', 'Tops', 'Jeans', 'Jewellery', 'Bags'],
   women_western: ['All', 'Tops & Tunics', 'Dresses', 'T-Shirts', 'Jeans & Jeggings', 'Trousers', 'Skirts', 'Winterwear'],
   kurti_saree: ['All', 'Kurtis', 'Sarees', 'Silk Sarees', 'Kurti Sets', 'Lehenga', 'Party Wear'],
   kurti_saree_lehenga: ['All', 'Kurtis', 'Sarees', 'Silk Sarees', 'Kurti Sets', 'Lehenga', 'Party Wear'],
+  lingerie: ['All', 'Bra & Bralettes', 'Panties', 'Lingerie Sets', 'Nightsuits', 'Shapewear'],
   grocery: ['All', 'Dairy & Eggs', 'Atta & Rice', 'Snacks & Munchies', 'Beverages', 'Instant Food', 'Spices'],
   electronics: ['All', 'Smartphones', 'Headphones & Earbuds', 'Smartwatches', 'Laptops', 'AC & Appliances', 'Accessories'],
   home_kitchen: ['All', 'Cookware & Kadais', 'Electric Kettles', 'Kitchen Tools', 'Storage', 'Home Decor'],
@@ -188,6 +111,7 @@ export default function CategoryProductsScreen() {
   // Core product & loading state
   const [allCategoryProducts, setAllCategoryProducts] = useState<EnhancedProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const [liveSubcategories, setLiveSubcategories] = useState<string[]>([]);
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -205,23 +129,10 @@ export default function CategoryProductsScreen() {
   const [sortBy, setSortBy] = useState<'popularity' | 'price_low' | 'price_high' | 'rating' | 'discount'>('popularity');
   const [selectedBrand, setSelectedBrand] = useState<string>('All');
 
-  // Normalized Target Category Key
+  // Normalized Target Category Key using master intelligent resolver
   const targetCategoryKey = useMemo(() => {
-    const raw = (categoryId || categoryName || '').toLowerCase();
-    if (raw.includes('men') && !raw.includes('women')) return 'men';
-    if (raw.includes('kurti') || raw.includes('saree') || raw.includes('lehenga')) return 'kurti_saree_lehenga';
-    if (raw.includes('women')) return 'women_western';
-    if (raw.includes('elect')) return 'electronics';
-    if (raw.includes('groc') || raw.includes('food') || raw.includes('dairy')) return 'grocery';
-    if (raw.includes('kitchen') || raw.includes('home')) return 'home_kitchen';
-    if (raw.includes('beauty') || raw.includes('health')) return 'beauty';
-    if (raw.includes('kid') || raw.includes('toy')) return 'kids_toys';
-    if (raw.includes('bag') || raw.includes('footwear')) return 'bags';
-    if (raw.includes('watch')) return 'watches';
-    if (raw.includes('jewel')) return 'jewellery';
-    if (raw.includes('sport')) return 'sports';
-    return raw;
-  }, [categoryId, categoryName]);
+    return normalizeCategoryKey(categoryId, categoryName, initialSubcategory);
+  }, [categoryId, categoryName, initialSubcategory]);
 
   // Fetch Category Products from Firestore
   useEffect(() => {
@@ -235,40 +146,29 @@ export default function CategoryProductsScreen() {
           const data = doc.data();
           if (data.status === 'Out of Stock' || data.isActive === false) return;
 
-          const detectedCategory = classifyProduct({
-            name: data.name,
-            category: data.category,
-            subCategory: data.subCategory || data.subcategory,
-          });
+          const productItem = {
+            id: doc.id,
+            name: data.name || '',
+            category: data.category || '',
+            subCategory: data.subCategory || data.subcategory || '',
+            tags: data.tags || [],
+            brand: data.brand || data.vendor || data.shop_name || '',
+            description: data.description || '',
+          };
 
-          // Check if product belongs to this category
-          let matchesCategory = false;
-          if (targetCategoryKey === 'men') {
-            matchesCategory = detectedCategory === 'men';
-          } else if (targetCategoryKey === 'women_western' || targetCategoryKey === 'women') {
-            matchesCategory = detectedCategory === 'women_western' || detectedCategory === 'kurti_saree_lehenga';
-          } else if (targetCategoryKey === 'kurti_saree' || targetCategoryKey === 'kurti_saree_lehenga') {
-            matchesCategory = detectedCategory === 'kurti_saree_lehenga';
-          } else if (targetCategoryKey === 'electronics') {
-            matchesCategory = detectedCategory === 'electronics';
-          } else if (targetCategoryKey === 'grocery') {
-            matchesCategory = detectedCategory === 'grocery';
-          } else if (targetCategoryKey === 'home_kitchen') {
-            matchesCategory = detectedCategory === 'home_kitchen';
-          } else if (targetCategoryKey === 'beauty') {
-            matchesCategory = detectedCategory === 'beauty';
-          } else if (targetCategoryKey === 'kids_toys') {
-            matchesCategory = detectedCategory === 'kids_toys';
-          } else if (targetCategoryKey === 'bags') {
-            matchesCategory = detectedCategory === 'bags';
-          } else if (targetCategoryKey === 'watches') {
-            matchesCategory = detectedCategory === 'watches';
-          } else {
-            // General matching
-            matchesCategory =
-              detectedCategory === targetCategoryKey ||
-              (data.category || '').toLowerCase().includes(targetCategoryKey);
-          }
+          const detectedCategory = classifyProduct(productItem);
+
+          const rawCat = (data.category || '').toLowerCase().trim();
+          const targetKey = targetCategoryKey.toLowerCase().trim();
+          const targetName = (categoryName || '').toLowerCase().trim();
+
+          // Direct match on Firebase category name/id OR intelligent classifier
+          const matchesCategory =
+            rawCat === targetKey ||
+            rawCat === targetName ||
+            (rawCat.length > 2 && (rawCat.includes(targetKey) || targetKey.includes(rawCat))) ||
+            (targetName.length > 2 && (rawCat.includes(targetName) || targetName.includes(rawCat))) ||
+            doesProductBelongToCategory(productItem, targetCategoryKey);
 
           if (matchesCategory) {
             productsData.push({
@@ -302,16 +202,35 @@ export default function CategoryProductsScreen() {
     fetchCategoryProducts();
   }, [targetCategoryKey]);
 
-  // Derive subcategory chips
+  // Real-time listener for category subcategories managed by Admin
+  useEffect(() => {
+    const q = collection(db, 'categories');
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const doc = snapshot.docs.find((d) => {
+        const idMatches = d.id.toLowerCase() === targetCategoryKey.toLowerCase();
+        const nameMatches = (d.data().name || '').toLowerCase() === (categoryName || '').toLowerCase();
+        return idMatches || nameMatches;
+      });
+      if (doc && Array.isArray(doc.data().subcategories) && doc.data().subcategories.length > 0) {
+        setLiveSubcategories(doc.data().subcategories);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [targetCategoryKey, categoryName]);
+
+  // Derive subcategory chips (Admin Firestore live > preset fallbacks > discovered from products)
   const subcategoryList = useMemo(() => {
-    const preset = PRESET_SUBCATEGORIES[targetCategoryKey] || ['All', 'Popular', 'Trending', 'New Deals'];
+    const preset = liveSubcategories.length > 0
+      ? liveSubcategories
+      : (PRESET_SUBCATEGORIES[targetCategoryKey] || ['All', 'Popular', 'Trending', 'New Deals']);
     const fromProducts = Array.from(
       new Set(allCategoryProducts.map((p) => p.subcategory?.trim()).filter(Boolean))
     ) as string[];
 
     const combined = ['All', ...new Set([...preset.filter((s) => s !== 'All'), ...fromProducts])];
-    return combined.slice(0, 8);
-  }, [targetCategoryKey, allCategoryProducts]);
+    return combined.slice(0, 15);
+  }, [liveSubcategories, targetCategoryKey, allCategoryProducts]);
 
   // Derive available brands for filter modal
   const availableBrands = useMemo(() => {
@@ -336,50 +255,9 @@ export default function CategoryProductsScreen() {
       );
     }
 
-    // 2. Subcategory Filter with intelligent word matching
+    // 2. Subcategory Filter with intelligent synonym & word matching
     if (activeSubcategory && activeSubcategory !== 'All') {
-      const target = activeSubcategory.toLowerCase();
-      list = list.filter((p) => {
-        const sub = (p.subcategory || '').toLowerCase();
-        const name = p.name.toLowerCase();
-
-        // Direct match
-        if (sub.includes(target) || target.includes(sub)) return true;
-
-        // Specific subcategory alias checks
-        if (target.includes('t-shirt') || target.includes('tshirt') || target.includes('t shirt')) {
-          return name.includes('t-shirt') || name.includes('tshirt') || name.includes('t shirt') || name.includes('tee');
-        }
-        if (target.includes('shirt') && !target.includes('t-shirt')) {
-          return name.includes('shirt') || sub.includes('shirt');
-        }
-        if (target.includes('combo')) {
-          return name.includes('combo') || name.includes('pack') || name.includes('set');
-        }
-        if (target.includes('trouser') || target.includes('jean')) {
-          return name.includes('trouser') || name.includes('jean') || name.includes('pant') || name.includes('denim');
-        }
-        if (target.includes('kurti')) {
-          return name.includes('kurti') || name.includes('kurta') || name.includes('anarkali');
-        }
-        if (target.includes('saree')) {
-          return name.includes('saree') || name.includes('silk');
-        }
-        if (target.includes('kettle')) {
-          return name.includes('kettle');
-        }
-        if (target.includes('cookware') || target.includes('kadai')) {
-          return name.includes('kadai') || name.includes('pan') || name.includes('cookware');
-        }
-        if (target.includes('smartphone') || target.includes('mobile')) {
-          return name.includes('iphone') || name.includes('phone') || name.includes('mobile') || name.includes('oneplus');
-        }
-        if (target.includes('headphone') || target.includes('earbud')) {
-          return name.includes('airpods') || name.includes('earbuds') || name.includes('headphone');
-        }
-
-        return name.includes(target);
-      });
+      list = list.filter((p) => doesProductMatchSubcategory(p, activeSubcategory));
     }
 
     // 3. Quick Filter: Fast Delivery
@@ -711,9 +589,11 @@ export default function CategoryProductsScreen() {
                   {/* Image Container */}
                   <View style={styles.imageWrap}>
                     <SafeImage
-                      uri={item.imageUrl || item.images?.[0]}
+                      uri={getProductImage(item)}
                       style={styles.productImage}
                       resizeMode="cover"
+                      fallbackEmoji={item.emoji}
+                      fallbackText={item.name}
                     />
 
                     {/* Discount Badge */}

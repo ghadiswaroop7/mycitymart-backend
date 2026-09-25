@@ -86,8 +86,18 @@ export const setupOrderStatusNotificationListener = (uid: string) => {
       if (currentStatus && prevStatus !== currentStatus) {
         notifiedOrderStatusCache[orderId] = currentStatus;
 
-        // Trigger notification if status changed to out_for_delivery or picked_up
-        if (['picked_up', 'out_for_delivery', 'on_the_way'].includes(currentStatus) && prevStatus) {
+        // Trigger notifications for status lifecycle transitions
+        if (['preparing', 'accepted', 'confirmed'].includes(currentStatus) && prevStatus && !['preparing', 'accepted', 'confirmed'].includes(prevStatus)) {
+          triggerLocalNotification(
+            'Order Confirmed & Preparing 👨‍🍳',
+            `The seller is preparing your items for Order #${orderId.substring(0, 8).toUpperCase()}`
+          );
+        } else if (currentStatus === 'packed' && prevStatus && prevStatus !== 'packed') {
+          triggerLocalNotification(
+            'Order Packed & Ready 🛍️',
+            `Order #${orderId.substring(0, 8).toUpperCase()} has been packed and is ready for pickup!`
+          );
+        } else if (['picked_up', 'out_for_delivery', 'on_the_way', 'shipped'].includes(currentStatus) && prevStatus && !['picked_up', 'out_for_delivery', 'on_the_way', 'shipped'].includes(prevStatus)) {
           triggerLocalNotification(
             'Your Order is Out for Delivery 🛵',
             `Order #${orderId.substring(0, 8).toUpperCase()} is on the way with your rider!`
@@ -98,6 +108,7 @@ export const setupOrderStatusNotificationListener = (uid: string) => {
             `Order #${orderId.substring(0, 8).toUpperCase()} has been delivered successfully. Enjoy your purchase!`
           );
         }
+
       } else if (currentStatus && !prevStatus) {
         // Initial load cache
         notifiedOrderStatusCache[orderId] = currentStatus;

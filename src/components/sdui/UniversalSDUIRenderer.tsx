@@ -121,7 +121,7 @@ export const UniversalSDUIRenderer: React.FC<UniversalSDUIProps> = ({ blocks, ca
           );
         }
 
-        // 3. THE GRAND WEDDING STORE 3x3 JHAROKHA TEMPLE ARCHES
+        // 3. THE GRAND WEDDING STORE 3x3 JHAROKHA TEMPLE ARCHES (BOUTIQUE / HERITAGE ZONE)
         if (blockType === 'wedding_store_3x3_jharokha' || blockType === 'jharokha_grid') {
           const items = block.data?.items || [];
           if (items.length === 0) return null;
@@ -145,6 +145,35 @@ export const UniversalSDUIRenderer: React.FC<UniversalSDUIProps> = ({ blocks, ca
                   </TouchableOpacity>
                 ))}
               </View>
+
+              {/* Boutique Delivery Microcopy (Replaces ETA bar equivalent; NO X-min language near artisanal/bridal items) */}
+              <View style={{ marginTop: 10, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)', alignItems: 'center' }}>
+                <Text style={{ color: '#FDE68A', fontSize: 10, fontFamily: 'Poppins_600SemiBold' }}>
+                  🚚 Delivery in 2-4 days, handcrafted to order
+                </Text>
+              </View>
+
+              {/* Reused Trust Badge Row */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingHorizontal: 4 }}>
+                <Text style={{ color: '#FBBF24', fontSize: 9, fontFamily: 'Poppins_600SemiBold' }}>🛡️ 100% Genuine</Text>
+                <Text style={{ color: '#FBBF24', fontSize: 9, fontFamily: 'Poppins_600SemiBold' }}>🔄 7 Days Return</Text>
+                <Text style={{ color: '#FBBF24', fontSize: 9, fontFamily: 'Poppins_600SemiBold' }}>📦 Express Delivery</Text>
+              </View>
+            </View>
+          );
+        }
+
+        // 3B. PHYSICAL ZONE DIVIDER BETWEEN QUICK-COMMERCE & BOUTIQUE
+        if (blockType === 'zone_divider' || blockType === 'physical_divider') {
+          return (
+            <View key={block.id || index} style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 10, paddingHorizontal: 4 }}>
+              <View style={{ flex: 1, height: 1.5, backgroundColor: 'rgba(245,158,11,0.4)' }} />
+              <View style={{ backgroundColor: '#1E1B4B', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, borderWidth: 1, borderColor: '#F59E0B', marginHorizontal: 8 }}>
+                <Text style={{ color: '#FDE68A', fontSize: 9, fontFamily: 'Poppins_800ExtraBold', letterSpacing: 0.5 }}>
+                  ✦ BOUTIQUE & HERITAGE MARKETPLACE ✦
+                </Text>
+              </View>
+              <View style={{ flex: 1, height: 1.5, backgroundColor: 'rgba(245,158,11,0.4)' }} />
             </View>
           );
         }
@@ -174,33 +203,33 @@ export const UniversalSDUIRenderer: React.FC<UniversalSDUIProps> = ({ blocks, ca
           );
         }
 
-        // 5. ZEPTO 10-MIN ETA & FREE SHIPPING BAR
+        // 5. ZEPTO 10-MIN ETA & FREE SHIPPING BAR (QUICK-COMMERCE ZONE ONLY)
         if (blockType === 'zepto_eta_bar' || blockType === 'eta_bar') {
           return (
             <TouchableOpacity
               key={block.id || index}
               activeOpacity={0.9}
               onPress={() => handlePress('cart')}
-              style={[styles.card, { backgroundColor: '#1A132F', borderColor: '#F59E0B', borderWidth: 1 }]}
+              style={[styles.card, { backgroundColor: '#FFF7ED', borderColor: '#EA580C', borderWidth: 1.5 }]}
             >
               <View style={styles.rowBetween}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <HugeIcon icon={FlashIcon} size={16} color="#FBBF24" fill="#FBBF24" />
-                  <Text style={{ color: '#FBBF24', fontFamily: 'Poppins_700Bold', fontSize: 13 }}>
-                    {block.data?.title || block.title || '10-15 Mins Superfast Delivery'}
+                  <HugeIcon icon={FlashIcon} size={16} color="#EA580C" fill="#EA580C" />
+                  <Text style={{ color: '#9A3412', fontFamily: 'Poppins_700Bold', fontSize: 13 }}>
+                    {block.data?.title || block.title || '⚡ 10-15 Mins Superfast Delivery'}
                   </Text>
                 </View>
-                <View style={styles.amberBadge}>
-                  <Text style={{ fontSize: 9, fontFamily: 'Poppins_800ExtraBold', color: '#000' }}>
+                <View style={[styles.amberBadge, { backgroundColor: '#EA580C' }]}>
+                  <Text style={{ fontSize: 9, fontFamily: 'Poppins_800ExtraBold', color: '#FFF' }}>
                     {block.data?.badgeText || 'EXPRESS'}
                   </Text>
                 </View>
               </View>
-              <View style={styles.progressBarBg}>
-                <View style={[styles.progressBarFill, { width: '75%' }]} />
+              <View style={[styles.progressBarBg, { backgroundColor: '#FED7AA' }]}>
+                <View style={[styles.progressBarFill, { width: '52%', backgroundColor: '#EA580C' }]} />
               </View>
-              <Text style={{ color: '#CBD5E1', fontSize: 11, fontFamily: 'Poppins_400Regular' }}>
-                {block.data?.subtitle || block.subtitle || 'Add ₹150 more to unlock FREE instant delivery'}
+              <Text style={{ color: '#C2410C', fontSize: 11, fontFamily: 'Poppins_600SemiBold' }}>
+                {block.data?.subtitle || block.subtitle || 'Add ₹140 more to unlock FREE Instant Delivery'}
               </Text>
             </TouchableOpacity>
           );

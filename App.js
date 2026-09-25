@@ -7,6 +7,7 @@ import { Provider } from 'react-redux';
 import { store } from './src/store';
 import RootNavigator from './src/navigation/RootNavigator';
 import { AuthProvider } from './src/context/AuthContext';
+import { NetworkProvider } from './src/context/NetworkContext';
 import * as SplashScreen from 'expo-splash-screen';
 import {
   useFonts,
@@ -144,10 +145,12 @@ function AppContent() {
     <SafeAreaProvider style={{ flex: 1, width: '100%', height: '100%' }}>
       <Provider store={store}>
         <AuthProvider>
-          <NavigationContainer onReady={onNavigationReady}>
-            <RootNavigator />
-            <StatusBar style="auto" />
-          </NavigationContainer>
+          <NetworkProvider>
+            <NavigationContainer onReady={onNavigationReady}>
+              <RootNavigator />
+              <StatusBar style="auto" />
+            </NavigationContainer>
+          </NetworkProvider>
         </AuthProvider>
       </Provider>
     </SafeAreaProvider>

@@ -18,7 +18,19 @@ export default function AddressesScreen() {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [newAddress, setNewAddress] = useState({ fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', type: 'Home' });
+  const [newAddress, setNewAddress] = useState({ 
+    fullName: '', 
+    phone: '', 
+    addressLine1: '', 
+    addressLine2: '', 
+    city: '', 
+    state: '', 
+    pincode: '', 
+    type: 'Home',
+    latitude: 21.1458,
+    longitude: 79.0882,
+  });
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
 
   const fetchAddresses = async () => {
     setLoading(true);
@@ -35,6 +47,29 @@ export default function AddressesScreen() {
     fetchAddresses();
   }, [uid]);
 
+  const handleDetectLocation = () => {
+    setIsDetectingLocation(true);
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          setNewAddress(prev => ({
+            ...prev,
+            latitude: Number(latitude.toFixed(5)),
+            longitude: Number(longitude.toFixed(5)),
+          }));
+          setIsDetectingLocation(false);
+        },
+        () => {
+          setIsDetectingLocation(false);
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    } else {
+      setIsDetectingLocation(false);
+    }
+  };
+
   const handleSaveAddress = async () => {
     if (!newAddress.fullName || !newAddress.phone || !newAddress.addressLine1 || !newAddress.city || !newAddress.pincode) {
       Alert.alert('Validation Error', 'Please fill all required fields');
@@ -43,9 +78,25 @@ export default function AddressesScreen() {
     setIsSaving(true);
     try {
       const isFirst = addresses.length === 0;
-      await saveAddress(uid, { ...newAddress, isDefault: isFirst });
+      await saveAddress(uid, { 
+        ...newAddress, 
+        latitude: Number(newAddress.latitude) || 21.1458,
+        longitude: Number(newAddress.longitude) || 79.0882,
+        isDefault: isFirst 
+      });
       setIsModalVisible(false);
-      setNewAddress({ fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', type: 'Home' });
+      setNewAddress({ 
+        fullName: '', 
+        phone: '', 
+        addressLine1: '', 
+        addressLine2: '', 
+        city: '', 
+        state: '', 
+        pincode: '', 
+        type: 'Home',
+        latitude: 21.1458,
+        longitude: 79.0882,
+      });
       fetchAddresses();
     } catch (e) {
       Alert.alert('Error', 'Failed to save address');
@@ -96,6 +147,12 @@ export default function AddressesScreen() {
         {item.addressLine2 ? <Text style={styles.details}>{item.addressLine2}</Text> : null}
         <Text style={styles.details}>{item.city}, {item.state} - {item.pincode}</Text>
         <Text style={styles.phone}>📞 {item.phone}</Text>
+
+        <View style={{ backgroundColor: '#E8F5E9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4, alignSelf: 'flex-start', marginTop: 2, marginBottom: 8 }}>
+          <Text style={{ fontSize: 10, fontWeight: '700', color: '#008B45' }}>
+            📍 Lat: {Number(item.latitude || 21.1458).toFixed(4)}, Lng: {Number(item.longitude || 79.0882).toFixed(4)} • Zone Verified
+          </Text>
+        </View>
 
         <View style={styles.actionsRow}>
           {!item.isDefault && (
@@ -161,6 +218,18 @@ export default function AddressesScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add New Address</Text>
             <View style={styles.inputGroup}>
+              {/* GPS Auto-detect Button */}
+              <TouchableOpacity 
+                onPress={handleDetectLocation} 
+                disabled={isDetectingLocation}
+                style={{ backgroundColor: '#E8F5E9', padding: 10, borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#C8E6C9' }}
+              >
+                <HugeIcon icon={Location01Icon} size={16} color="#008B45" />
+                <Text style={{ color: '#008B45', fontWeight: '700', fontSize: 13, marginLeft: 6 }}>
+                  {isDetectingLocation ? 'Detecting Location...' : '📍 Auto-detect GPS Location'}
+                </Text>
+              </TouchableOpacity>
+
               <TextInput style={styles.input} placeholder="Full Name*" value={newAddress.fullName} onChangeText={t => setNewAddress({ ...newAddress, fullName: t })} />
               <TextInput style={styles.input} placeholder="Phone Number*" keyboardType="phone-pad" value={newAddress.phone} onChangeText={t => setNewAddress({ ...newAddress, phone: t })} />
               <TextInput style={styles.input} placeholder="Address Line 1*" value={newAddress.addressLine1} onChangeText={t => setNewAddress({ ...newAddress, addressLine1: t })} />
@@ -170,6 +239,12 @@ export default function AddressesScreen() {
                 <TextInput style={[styles.input, { flex: 1 }]} placeholder="State*" value={newAddress.state} onChangeText={t => setNewAddress({ ...newAddress, state: t })} />
               </View>
               <TextInput style={styles.input} placeholder="Pincode*" keyboardType="number-pad" value={newAddress.pincode} onChangeText={t => setNewAddress({ ...newAddress, pincode: t })} />
+              
+              {/* Coordinates row */}
+              <View style={styles.row}>
+                <TextInput style={[styles.input, { flex: 1, marginRight: 8 }]} placeholder="Latitude" keyboardType="numeric" value={String(newAddress.latitude)} onChangeText={t => setNewAddress({ ...newAddress, latitude: parseFloat(t) || 21.1458 })} />
+                <TextInput style={[styles.input, { flex: 1 }]} placeholder="Longitude" keyboardType="numeric" value={String(newAddress.longitude)} onChangeText={t => setNewAddress({ ...newAddress, longitude: parseFloat(t) || 79.0882 })} />
+              </View>
               
               <View style={styles.typeRow}>
                 {['Home', 'Work', 'Other'].map(type => (

@@ -63,6 +63,7 @@ import {
 } from '../services/firestoreService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import SafeImage from '../components/SafeImage';
+import { getProductImage } from '../utils/productImages';
 import Carousel from 'react-native-reanimated-carousel';
 import ImageViewer from 'react-native-image-zoom-viewer';
 import YoutubeVideoPlayer from './YoutubeVideoPlayer';
@@ -122,7 +123,10 @@ const buildMediaItems = (product: any) => {
   }
 
   if (items.length === 0) {
-    items.push({ type: 'image', url: 'https://via.placeholder.com/400' });
+    const resolved = getProductImage(product);
+    if (resolved) {
+      items.push({ type: 'image', url: resolved });
+    }
   }
   return items;
 };
@@ -526,6 +530,8 @@ export default function ProductDetailScreen() {
                     uri={item.url || item.thumbnail}
                     style={styles.carouselImage}
                     resizeMode="contain"
+                    fallbackEmoji={product?.emoji}
+                    fallbackText={product?.name}
                   />
                 </TouchableOpacity>
               );
@@ -1004,7 +1010,14 @@ export default function ProductDetailScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.viewShopBtn}
-                onPress={() => navigation.navigate('CategoryProducts', { categoryId: 'men', categoryName: productVendor })}
+                onPress={() => {
+                  const shopId = product.shopId || product.shop_id || product.sellerId;
+                  if (shopId) {
+                    navigation.navigate('ShopDetail', { shopId });
+                  } else {
+                    navigation.navigate('CategoryProducts', { categoryId: 'all', categoryName: productVendor });
+                  }
+                }}
               >
                 <Text style={styles.viewShopText}>View Shop →</Text>
               </TouchableOpacity>

@@ -8,6 +8,8 @@ import { addToCart, removeFromCart } from '../store/slices/cartSlice';
 import { RootState } from '../store';
 import SafeImage from './SafeImage';
 
+import { getProductImage } from '../utils/productImages';
+
 interface MiniProductCardProps {
   product: {
     id: string;
@@ -17,14 +19,19 @@ interface MiniProductCardProps {
     rating?: number;
     vendor?: string;
     imageUrl?: string;
+    images?: string[];
+    image?: string;
+    emoji?: string;
+    category?: string;
   };
 }
 
-export default function MiniProductCard({ product }: MiniProductCardProps) {
+function MiniProductCard({ product }: MiniProductCardProps) {
   const navigation = useNavigation<any>();
   const dispatch = useDispatch();
   const cartItem = useSelector((state: RootState) => state.cart.items.find(i => i.id === product.id));
   const quantity = cartItem ? cartItem.quantity : 0;
+  const resolvedImg = getProductImage(product);
 
   const discount =
     product.originalPrice && product.originalPrice > product.price
@@ -44,9 +51,11 @@ export default function MiniProductCard({ product }: MiniProductCardProps) {
         style={{ height: 110 }}
       >
         <SafeImage
-          uri={product.imageUrl}
-          className="w-full h-full"
+          uri={resolvedImg}
+          style={{ width: '100%', height: '100%' }}
           resizeMode="contain"
+          fallbackEmoji={product.emoji}
+          fallbackText={product.name}
         />
 
         {discount > 0 ? (
@@ -81,7 +90,7 @@ export default function MiniProductCard({ product }: MiniProductCardProps) {
                 price: product.price,
                 originalPrice: product.originalPrice || product.price,
                 quantity: 1,
-                imageUrl: product.imageUrl,
+                imageUrl: resolvedImg,
                 vendor: product.vendor,
               }))}
               className="border border-[#388E3C] rounded px-2 py-0.5"
@@ -100,7 +109,7 @@ export default function MiniProductCard({ product }: MiniProductCardProps) {
                 price: product.price,
                 originalPrice: product.originalPrice || product.price,
                 quantity: 1,
-                imageUrl: product.imageUrl,
+                imageUrl: resolvedImg,
                 vendor: product.vendor,
               }))} className="px-0.5">
                 <HugeIcon icon={Add01Icon} size={9} color="#FFFFFF" />
@@ -112,3 +121,5 @@ export default function MiniProductCard({ product }: MiniProductCardProps) {
     </TouchableOpacity>
   );
 }
+
+export default React.memo(MiniProductCard);

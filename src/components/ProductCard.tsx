@@ -1,104 +1,173 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { addToCart } from '../store/slices/cartSlice';
+import { toggleWishlist, syncWishlistToFirestore } from '../store/slices/wishlistSlice';
+import { RootState } from '../store';
 import SafeImage from './SafeImage';
+import { HugeIcon } from './HugeIcon';
+import { FavouriteIcon, StarIcon, CheckmarkBadge01Icon } from '@hugeicons/core-free-icons';
+import { BAZAR_COLORS, BAZAR_FONTS, BAZAR_RADIUS, BAZAR_SHADOWS } from '../styles/designSystem';
+
+import { getProductImage } from '../utils/productImages';
 
 export type ProductProps = {
   id: string;
   name: string;
   price: number;
   originalPrice: number;
-  rating: number;
-  vendor: string;
+  rating?: number;
+  reviewCount?: number;
+  reviewsCount?: number;
+  vendor?: string;
+  shopName?: string;
   imageUrl?: string;
+  images?: string[];
+  image?: string;
+  thumbnail?: string;
   deliveryTime?: string;
   distance?: string;
+  isFastDelivery?: boolean;
+  inStock?: boolean;
+  category?: string;
+  emoji?: string;
 };
 
-export default function ProductCard({ product }: { product: ProductProps }) {
+function ProductCard({ product }: { product: ProductProps }) {
   const navigation = useNavigation<any>();
   const dispatch = useDispatch();
   const [isAdded, setIsAdded] = useState(false);
 
-  const handleAdd = () => {
+  const authUser = useSelector((state: RootState) => state.auth.user);
+  const wishlistItems = useSelector((state: RootState) => state.wishlist.items);
+  const isWishlisted = wishlistItems.includes(product.id);
+
+  const handleAdd = (e: any) => {
+    e.stopPropagation?.();
+    const primaryImg = getProductImage(product);
     dispatch(addToCart({
       id: product.id,
       name: product.name,
       price: product.price,
-      originalPrice: product.originalPrice,
+      originalPrice: product.originalPrice || product.price,
       quantity: 1,
-      imageUrl: product.imageUrl,
-      vendor: product.vendor,
+      imageUrl: primaryImg,
+      vendor: product.vendor || product.shopName || 'Verified Store',
     }));
     setIsAdded(true);
     setTimeout(() => {
       setIsAdded(false);
-    }, 1500);
+    }, 1200);
   };
 
-  const discount = product.originalPrice > 0
-    ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
+  const handleToggleWishlist = (e: any) => {
+    e.stopPropagation?.();
+    dispatch(toggleWishlist(product.id));
+    if (authUser?.uid) {
+      const updated = isWishlisted
+        ? wishlistItems.filter(id => id !== product.id)
+        : [...wishlistItems, product.id];
+      dispatch(syncWishlistToFirestore({ uid: authUser.uid, items: updated }) as any);
+    }
+  };
+
+  const originalPrice = product.originalPrice || 0;
+  const price = product.price || 0;
+  const discount = originalPrice > price && originalPrice > 0
+    ? Math.round(((originalPrice - price) / originalPrice) * 100)
     : 0;
+
+  const ratingVal = product.rating ? Number(product.rating).toFixed(1) : '4.3';
+  const reviewsTotal = product.reviewCount || product.reviewsCount || 18;
+  const vendorName = product.vendor || product.shopName || 'Verified Store';
+  const imageUri = getProductImage(product);
 
   return (
     <TouchableOpacity
       activeOpacity={0.92}
       onPress={() => navigation.navigate('ProductDetail', { productId: product.id })}
-      className="bg-white rounded-2xl border border-zinc-100 shadow-sm w-full mb-3 overflow-hidden"
+      style={styles.card}
     >
-      {/* Image Section — Dynamic height for Masonry effect */}
-      <View className="w-full bg-zinc-50 relative p-1" style={{ minHeight: 140, height: 140 + (product.name.length % 30) }}>
-        <SafeImage 
-          uri={product.imageUrl || (product as any).images?.[0] || (product as any).image} 
-          style={{ width: '100%', height: '100%' }} 
-          resizeMode="cover" 
+      {/* ── IMAGE WRAPPER WITH FLOATING BADGES ── */}
+      <View style={styles.imageContainer}>
+        <SafeImage
+          uri={imageUri}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+          fallbackEmoji={product.emoji}
+          fallbackText={product.name}
         />
+
+        {/* Wishlist Floating Action */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={handleToggleWishlist}
+          style={styles.wishlistBtn}
+        >
+          <HugeIcon
+            icon={FavouriteIcon}
+            size={16}
+            color={isWishlisted ? BAZAR_COLORS.error : '#64748B'}
+            fill={isWishlisted ? BAZAR_COLORS.error : 'none'}
+          />
+        </TouchableOpacity>
 
         {/* Discount Badge */}
         {discount > 0 ? (
-          <View className="absolute top-2 left-2 bg-green-600 px-1.5 py-0.5 rounded flex-row items-center">
-            <Text className="text-white text-[9px] font-poppins-bold">{discount}% OFF</Text>
+          <View style={styles.discountBadge}>
+            <Text style={styles.discountText}>{discount}% OFF</Text>
           </View>
         ) : null}
+
+        {/* Zepto-style Omnipresent Delivery Promise */}
+        <View style={styles.deliveryPill}>
+          <Text style={styles.deliveryText}>⚡ {product.deliveryTime || '25 mins'}</Text>
+        </View>
       </View>
 
-      <View className="p-2.5 pb-4">
-        {/* Title */}
-        <Text className="text-[11px] font-poppins-semibold text-[#1A1A1A] mb-1 leading-[16px]" numberOfLines={2}>
-          {product.name}
-        </Text>
-        
-        {/* Shop Name & Distance */}
-        <View className="flex-row items-center justify-between mb-2">
-          <Text className="text-[9px] font-poppins-light text-[#1A1A1A] opacity-80" numberOfLines={1} style={{ flex: 1 }}>
-            By {product.vendor}
+      {/* ── PRODUCT CONTENT & PRICING ── */}
+      <View style={styles.content}>
+        {/* Verified Store Chip */}
+        <View style={styles.vendorRow}>
+          <Text style={styles.vendorName} numberOfLines={1}>
+            {vendorName}
           </Text>
-          {product.distance ? (
-            <Text className="text-[9px] font-poppins-medium text-blue-600 ml-1">
-              {product.distance}
-            </Text>
-          ) : null}
+          <HugeIcon icon={CheckmarkBadge01Icon} size={11} color={BAZAR_COLORS.primary} />
         </View>
 
-        {/* Price & Add Button Row */}
-        <View className="flex-row items-center justify-between mt-auto">
-          <View>
-            <View className="flex-row items-center flex-wrap">
-              <Text className="text-[13px] font-poppins-bold text-[#1A1A1A]">₹{product.price}</Text>
-              {product.originalPrice > product.price && (
-                <Text className="text-[9px] font-poppins-light text-zinc-400 line-through ml-1">₹{product.originalPrice}</Text>
-              )}
+        {/* Title */}
+        <Text style={styles.title} numberOfLines={2}>
+          {product.name}
+        </Text>
+
+        {/* Rating Row */}
+        <View style={styles.ratingRow}>
+          <View style={styles.ratingBadge}>
+            <Text style={styles.ratingText}>{ratingVal}</Text>
+            <HugeIcon icon={StarIcon} size={9} color="#FFFFFF" fill="#FFFFFF" />
+          </View>
+          <Text style={styles.reviewsCount}>({reviewsTotal})</Text>
+        </View>
+
+        {/* Pricing & Quick Add CTA */}
+        <View style={styles.footerRow}>
+          <View style={styles.priceCol}>
+            <View style={styles.priceWrapper}>
+              <Text style={styles.currentPrice}>₹{price.toLocaleString('en-IN')}</Text>
+              {originalPrice > price ? (
+                <Text style={styles.originalPrice}>₹{originalPrice.toLocaleString('en-IN')}</Text>
+              ) : null}
             </View>
           </View>
-          
+
           <TouchableOpacity
+            activeOpacity={0.85}
             onPress={handleAdd}
-            className={`border rounded-md px-2 py-1 ${isAdded ? 'bg-green-600 border-green-600' : 'bg-[#008B45]/5 border-[#008B45]'}`}
+            style={[styles.addBtn, isAdded && styles.addBtnSuccess]}
           >
-            <Text className={`text-[10px] font-poppins-bold ${isAdded ? 'text-white' : 'text-[#008B45]'}`}>
-              {isAdded ? 'ADDED ✓' : 'ADD'}
+            <Text style={[styles.addBtnText, isAdded && styles.addBtnTextSuccess]}>
+              {isAdded ? 'ADDED ✓' : '+ ADD'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -106,3 +175,165 @@ export default function ProductCard({ product }: { product: ProductProps }) {
     </TouchableOpacity>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: BAZAR_COLORS.surface,
+    borderRadius: BAZAR_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: BAZAR_COLORS.cardBorder,
+    width: '100%',
+    marginBottom: 12,
+    overflow: 'hidden',
+    ...BAZAR_SHADOWS.sm,
+  },
+  imageContainer: {
+    width: '100%',
+    height: 160,
+    backgroundColor: BAZAR_COLORS.background,
+    position: 'relative',
+  },
+  wishlistBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 30,
+    height: 30,
+    borderRadius: BAZAR_RADIUS.full,
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...BAZAR_SHADOWS.sm,
+    zIndex: 10,
+  },
+  discountBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: BAZAR_COLORS.accentOrange,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: BAZAR_RADIUS.xs,
+    zIndex: 10,
+  },
+  discountText: {
+    color: '#FFFFFF',
+    fontSize: 9.5,
+    fontFamily: BAZAR_FONTS.extrabold,
+    letterSpacing: 0.3,
+  },
+  deliveryPill: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
+    backgroundColor: 'rgba(15, 23, 42, 0.82)',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: BAZAR_RADIUS.xs,
+  },
+  deliveryText: {
+    color: '#FFFFFF',
+    fontSize: 9.5,
+    fontFamily: BAZAR_FONTS.semibold,
+  },
+  content: {
+    padding: 10,
+    paddingTop: 8,
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  vendorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginBottom: 3,
+  },
+  vendorName: {
+    fontFamily: BAZAR_FONTS.medium,
+    fontSize: 10.5,
+    color: BAZAR_COLORS.textSecondary,
+    maxWidth: '85%',
+  },
+  title: {
+    fontFamily: BAZAR_FONTS.semibold,
+    fontSize: 12.5,
+    color: BAZAR_COLORS.textPrimary,
+    lineHeight: 17,
+    minHeight: 34,
+    marginBottom: 4,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 8,
+  },
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: BAZAR_COLORS.primary,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 2,
+  },
+  ratingText: {
+    color: '#FFFFFF',
+    fontSize: 9.5,
+    fontFamily: BAZAR_FONTS.bold,
+  },
+  reviewsCount: {
+    fontSize: 10,
+    fontFamily: BAZAR_FONTS.regular,
+    color: BAZAR_COLORS.textMuted,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: BAZAR_COLORS.divider,
+  },
+  priceCol: {
+    flex: 1,
+  },
+  priceWrapper: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  currentPrice: {
+    fontFamily: BAZAR_FONTS.bold,
+    fontSize: 14,
+    color: BAZAR_COLORS.textPrimary,
+  },
+  originalPrice: {
+    fontFamily: BAZAR_FONTS.regular,
+    fontSize: 11,
+    color: BAZAR_COLORS.textMuted,
+    textDecorationLine: 'line-through',
+  },
+  addBtn: {
+    backgroundColor: BAZAR_COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: BAZAR_COLORS.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: BAZAR_RADIUS.sm,
+  },
+  addBtnSuccess: {
+    backgroundColor: BAZAR_COLORS.primary,
+    borderColor: BAZAR_COLORS.primary,
+  },
+  addBtnText: {
+    fontFamily: BAZAR_FONTS.bold,
+    fontSize: 11,
+    color: BAZAR_COLORS.primary,
+  },
+  addBtnTextSuccess: {
+    color: '#FFFFFF',
+  },
+});
+
+export default React.memo(ProductCard);

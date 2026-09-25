@@ -1,25 +1,12 @@
-import { useEffect, useState } from 'react';
-import { listenToGlobalAppIconConfig, changeAppIcon, AllowedAppIcon } from '../services/appIconService';
-
 /**
- * Custom hook that subscribes to Firestore `app_settings/global_config`
- * and dynamically updates the device's home screen icon.
+ * Dynamic App Icon Hook (REMOVED)
+ * Disabled to preserve Android 12+ boot stability.
  */
-export function useDynamicAppIcon() {
-  const [currentIcon, setCurrentIcon] = useState<string>('default_icon');
 
-  useEffect(() => {
-    const unsubscribe = listenToGlobalAppIconConfig((newIcon) => {
-      setCurrentIcon(newIcon);
-    });
+// export function useDynamicAppIcon() {
+//   return { currentIcon: 'default_icon', changeAppIcon: async () => true };
+// }
+// export default useDynamicAppIcon;
+export {};
 
-    return () => unsubscribe();
-  }, []);
 
-  return {
-    currentIcon,
-    changeAppIcon: (iconName: AllowedAppIcon) => changeAppIcon(iconName),
-  };
-}
-
-export default useDynamicAppIcon;

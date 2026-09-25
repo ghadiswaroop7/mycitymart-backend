@@ -9,6 +9,7 @@ export interface Profile {
   photoURL?: string | null;
   city?: string;
   location?: string;
+  addressType?: string;
   phoneNumber?: string | null;
 }
 

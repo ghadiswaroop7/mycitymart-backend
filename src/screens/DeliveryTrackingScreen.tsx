@@ -7,17 +7,19 @@ import { RootState } from '../store';
 import { HugeIcon } from '../components/HugeIcon';
 import { CallIcon, Message01Icon, StarIcon, ShieldIcon, PackageIcon, Location01Icon, BikeIcon, Navigation02Icon, Tick01Icon, Tick02Icon, ClockIcon, ArrowLeft01Icon } from '@hugeicons/core-free-icons';
 import { subscribeToOrder, subscribeToRiderLocation } from '../services/firestoreService';
+import { useLiveOrderTracking } from '../hooks/useLiveOrderTracking';
 import LiveOrderMap from '../components/LiveOrderMap';
 
 const { width } = Dimensions.get('window');
 
 // Status steps lifecycle definition
 const STATUS_STEPS = [
-  { key: 'pending', label: 'Order Pending', desc: 'Order received, searching for nearby rider' },
-  { key: 'assigned', label: 'Rider Assigned', desc: 'Rider assigned to pick up your order' },
-  { key: 'picked_up', label: 'Out for Delivery', desc: 'Rider picked up order and is on the way' },
+  { key: 'pending', label: 'Order Placed', desc: 'Order received, awaiting seller confirmation' },
+  { key: 'preparing', label: 'Preparing & Packed', desc: 'Seller is preparing and packing your items' },
+  { key: 'out_for_delivery', label: 'Out for Delivery', desc: 'Rider picked up order and is on the way' },
   { key: 'delivered', label: 'Delivered', desc: 'Order successfully delivered to your doorstep' },
 ];
+
 
 export default function DeliveryTrackingScreen() {
   const navigation = useNavigation<any>();
@@ -31,60 +33,44 @@ export default function DeliveryTrackingScreen() {
     || state.order.orders[0]
   );
 
-  const [liveOrder, setLiveOrder] = useState<any>(reduxOrder || null);
-  const [riderLocation, setRiderLocation] = useState<{ latitude: number; longitude: number } | undefined>(undefined);
-  const [simulationActive, setSimulationActive] = useState<boolean>(false);
-
   const targetOrderId = routeOrderId || reduxOrder?.id;
 
-  // 1. Listen to real-time order status updates in Firestore
-  useEffect(() => {
-    if (!targetOrderId) return;
+  // Real-time Firestore onSnapshot order & rider tracking via hook
+  const {
+    order: liveOrder,
+    status: hookStatus,
+    activeStepIndex: hookStepIdx,
+    riderLocation: liveRiderLocation,
+    customerLocation: hookCustomerLocation,
+    isDelivered: hookIsDelivered,
+    isCancelled: hookIsCancelled,
+    isOutForDelivery: hookIsOutForDelivery,
+  } = useLiveOrderTracking(targetOrderId);
 
-    const unsubscribeOrder = subscribeToOrder(targetOrderId, (updatedOrder) => {
-      if (updatedOrder) {
-        setLiveOrder(updatedOrder);
-      }
-    });
-
-    return () => unsubscribeOrder();
-  }, [targetOrderId]);
+  const [simulatedRiderLoc, setSimulatedRiderLoc] = useState<{ latitude: number; longitude: number } | undefined>(undefined);
+  const [simulationActive, setSimulationActive] = useState<boolean>(false);
 
   const currentOrder = liveOrder || reduxOrder;
-  const status = (currentOrder?.status || 'pending').toLowerCase();
+  const status = hookStatus || (currentOrder?.status || 'pending').toLowerCase();
   const riderId = currentOrder?.riderId || currentOrder?.deliveryPartnerId || currentOrder?.riderInfo?.id;
 
   // Customer Home Location Coordinates
-  const customerLocation = currentOrder?.customerLocation || {
-    latitude: currentOrder?.shippingAddress?.latitude || 21.1458,
-    longitude: currentOrder?.shippingAddress?.longitude || 79.0882,
+  const customerLocation = hookCustomerLocation || currentOrder?.customerLocation || {
+    latitude: currentOrder?.shippingAddress?.latitude || currentOrder?.shippingAddress?.lat || 21.1458,
+    longitude: currentOrder?.shippingAddress?.longitude || currentOrder?.shippingAddress?.lng || 79.0882,
     address: currentOrder?.customerDetails?.address || currentOrder?.shippingAddress?.addressLine1 || 'Delivery Address'
   };
 
-  // 2. Listen to real-time Rider GPS updates when riderId is present and order is picked_up / assigned
+  const riderLocation = liveRiderLocation || simulatedRiderLoc;
+
+  // Fallback / Interactive GPS Movement Simulation for demo orders if no live partner coordinates yet
   useEffect(() => {
-    if (!riderId) return;
-
-    const unsubscribeRider = subscribeToRiderLocation(riderId, (locationData) => {
-      if (locationData && locationData.latitude && locationData.longitude) {
-        setRiderLocation({
-          latitude: locationData.latitude,
-          longitude: locationData.longitude,
-        });
-      }
-    });
-
-    return () => unsubscribeRider();
-  }, [riderId]);
-
-  // 3. Fallback / Interactive GPS Movement Simulation for demo orders
-  useEffect(() => {
-    if (['picked_up', 'on_the_way'].includes(status) && !riderLocation) {
+    if (['picked_up', 'on_the_way'].includes(status) && !liveRiderLocation) {
       // Set initial rider location slightly away from customer home
       const startLat = customerLocation.latitude - 0.012;
       const startLng = customerLocation.longitude - 0.015;
 
-      setRiderLocation({ latitude: startLat, longitude: startLng });
+      setSimulatedRiderLoc({ latitude: startLat, longitude: startLng });
       setSimulationActive(true);
 
       let step = 0;
@@ -95,7 +81,7 @@ export default function DeliveryTrackingScreen() {
         const nextLat = startLat + (customerLocation.latitude - startLat) * progress;
         const nextLng = startLng + (customerLocation.longitude - startLng) * progress;
 
-        setRiderLocation({
+        setSimulatedRiderLoc({
           latitude: nextLat,
           longitude: nextLng
         });
@@ -103,26 +89,39 @@ export default function DeliveryTrackingScreen() {
 
       return () => clearInterval(interval);
     }
-  }, [status, customerLocation.latitude, customerLocation.longitude]);
+  }, [status, liveRiderLocation, customerLocation.latitude, customerLocation.longitude]);
 
   // Determine current active step index in status workflow
   const getStepIndex = (currentStatus: string) => {
     switch (currentStatus) {
-      case 'pending': return 0;
-      case 'assigned':
+      case 'pending':
+      case 'placed':
+        return 0;
+      case 'accepted':
       case 'confirmed':
-      case 'packed': return 1;
+      case 'preparing':
+      case 'packed':
+      case 'assigned':
+        return 1;
       case 'picked_up':
+      case 'out_for_delivery':
       case 'on_the_way':
-      case 'shipped': return 2;
-      case 'delivered': return 3;
-      default: return 0;
+      case 'shipped':
+        return 2;
+      case 'delivered':
+        return 3;
+      default:
+        return 0;
     }
   };
 
   const activeStepIdx = getStepIndex(status);
   const isDelivered = status === 'delivered';
   const isCancelled = status === 'cancelled';
+  const isOutForDelivery = ['picked_up', 'out_for_delivery', 'on_the_way', 'shipped'].includes(status);
+  const isPreparing = ['preparing', 'accepted', 'confirmed'].includes(status);
+  const isPacked = status === 'packed';
+  const isAssigned = status === 'assigned';
 
   // Rider Details
   const riderInfo = currentOrder?.riderInfo || {
@@ -184,16 +183,28 @@ export default function DeliveryTrackingScreen() {
 
         {/* ─── LIVE ETA / STATUS FLOATING CHIP ─── */}
         <View className="items-center mb-3 px-4">
-          <View className={`px-6 py-3 rounded-full shadow-xl flex-row items-center border-2 border-white ${isDelivered ? 'bg-[#008B45]' : isCancelled ? 'bg-red-500' : 'bg-[#1C1C1C]'}`}>
+          <View className={`px-6 py-3 rounded-full shadow-xl flex-row items-center border-2 border-white ${isDelivered ? 'bg-[#008B45]' : isCancelled ? 'bg-red-500' : isOutForDelivery ? 'bg-[#008B45]' : isPacked ? 'bg-[#1C1C1C]' : 'bg-[#1C1C1C]'}`}>
             {isDelivered ? (
               <HugeIcon icon={Tick02Icon} size={20} color="#FFFFFF" />
-            ) : status === 'picked_up' ? (
+            ) : isOutForDelivery ? (
               <HugeIcon icon={BikeIcon} size={20} color="#FA8C16" />
             ) : (
               <HugeIcon icon={ClockIcon} size={20} color="#FFFFFF" />
             )}
             <Text className="text-white text-base font-black tracking-wider ml-2">
-              {isDelivered ? 'ORDER DELIVERED 🎉' : isCancelled ? 'ORDER CANCELLED' : status === 'picked_up' ? 'RIDER IS ON THE WAY' : status === 'assigned' ? 'RIDER ASSIGNED' : 'SEARCHING FOR RIDER'}
+              {isDelivered 
+                ? 'ORDER DELIVERED 🎉' 
+                : isCancelled 
+                ? 'ORDER CANCELLED' 
+                : isOutForDelivery 
+                ? 'RIDER IS ON THE WAY 🛵' 
+                : isPacked 
+                ? 'ORDER PACKED & READY 🛍️' 
+                : isAssigned 
+                ? 'RIDER ASSIGNED' 
+                : isPreparing 
+                ? 'SELLER PREPARING ORDER 👨‍🍳' 
+                : 'ORDER PLACED • AWAITING SELLER'}
             </Text>
           </View>
         </View>

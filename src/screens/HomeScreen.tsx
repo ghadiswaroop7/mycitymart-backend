@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, ScrollView, Text, ActivityIndicator, Image, TouchableOpacity, StyleSheet, Dimensions, Animated, TextInput, FlatList, Modal, Alert, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { Video as ExpoAvVideo, ResizeMode } from 'expo-av';
 import LottieView from 'lottie-react-native';
-import Reanimated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedStyle, useAnimatedScrollHandler, interpolate, interpolateColor, Extrapolation, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
 import Svg, { Path, ClipPath, Defs, G, Image as SvgImage } from 'react-native-svg';
 import YoutubeVideoPlayer from './YoutubeVideoPlayer';
 import { getStorefrontLayouts, getProducts, getLocalShops, getBanners, getActiveFlashDeals, getCategories, createSampleBanners } from '../services/firestoreService';
@@ -24,11 +23,13 @@ import { RootState } from '../store';
 import { CATEGORIES } from '../config/categories';
 import { TAB_THEMES } from '../config/tabThemes';
 import { useHomepageData } from '../hooks/useHomepageData';
+import { normalizeCategoryKey, doesProductBelongToCategory } from '../utils/productClassifier';
 
 import HomeTabBar from '../components/HomeTabBar';
 import ProductCard from '../components/ProductCard';
 import MiniProductCard from '../components/MiniProductCard';
 import SafeImage from '../components/SafeImage';
+import { getProductImage } from '../utils/productImages';
 import DynamicPageBuilder from '../components/sdui/DynamicPageBuilder';
 import SDUIRenderer from '../components/SDUIRenderer';
 import UniversalSDUIRenderer from '../components/sdui/UniversalSDUIRenderer';
@@ -39,14 +40,12 @@ import LiveProductsCatalog from '../components/LiveProductsCatalog';
 import { handleSDUILink } from '../utils/sduiNavigation';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const BANNER_ASPECT_RATIO = 2.4;
+const BANNER_ASPECT_RATIO = 1.7; // Generous spacious height matching Toing app's hero banner container
 const BANNER_HEIGHT = Math.round(SCREEN_WIDTH / BANNER_ASPECT_RATIO);
-const HERO_TOP_PADDING = 140;
-const TOTAL_HEADER_HEIGHT = BANNER_HEIGHT + HERO_TOP_PADDING;
 
 // Professional Meesho-Style Category Icon (Big Squircle Card with Soft Pastel Tone & High-Def Artwork)
 const AnimatedCategoryIcon = ({ cat, idx, onPress }: { cat: any; idx?: number; onPress: () => void }) => {
-  const imageSrc = cat.image || cat.iconUrl;
+  const imageSrc = cat.imageUrl || cat.image || cat.iconUrl;
   const bgBadgeColor = cat.color || '#F8FAFC';
 
   return (
@@ -58,10 +57,12 @@ const AnimatedCategoryIcon = ({ cat, idx, onPress }: { cat: any; idx?: number; o
       {/* Big Meesho-Style Squircle Card */}
       <View style={[styles_cat.iconBadge, { backgroundColor: bgBadgeColor }]}>
         {imageSrc ? (
-          <Image
-            source={typeof imageSrc === 'string' ? { uri: imageSrc } : imageSrc}
+          <SafeImage
+            uri={imageSrc}
             style={styles_cat.iconImage}
             resizeMode="contain"
+            fallbackEmoji={cat.icon || '🛍️'}
+            fallbackText=""
           />
         ) : (
           <Text style={{ fontSize: 32 }}>{cat.icon || '🛍️'}</Text>
@@ -166,6 +167,31 @@ const getYoutubeIdFromUrl = (url: string) => {
   return (match && match[2].length === 11) ? match[2] : null;
 };
 
+// Native Video Loop Player via expo-video (Expo 56+)
+const NativeExpoVideo = ({ source, style }: { source: string; style?: any }) => {
+  const player = useVideoPlayer(source, p => {
+    p.loop = true;
+    p.muted = true;
+    p.play();
+  });
+
+  // Pause the looping hero video when this component unmounts (e.g. leaving Home)
+  useEffect(() => {
+    return () => {
+      try { player.pause(); } catch (e) {}
+    };
+  }, [player]);
+
+  return (
+    <VideoView
+      player={player}
+      style={style || StyleSheet.absoluteFill}
+      contentFit="cover"
+      nativeControls={false}
+    />
+  );
+};
+
 // Video Background Component with seamless Web & Native video support
 const HeroVideoBackground = ({ source: videoUrl }: { source: string }) => {
   if (!videoUrl) return null;
@@ -218,17 +244,7 @@ const HeroVideoBackground = ({ source: videoUrl }: { source: string }) => {
     );
   }
 
-  return (
-    <ExpoAvVideo
-      source={{ uri: videoUrl }}
-      style={StyleSheet.absoluteFill}
-      resizeMode={ResizeMode.COVER}
-      isLooping
-      shouldPlay
-      isMuted
-      useNativeControls={false}
-    />
-  );
+  return <NativeExpoVideo source={videoUrl} />;
 };
 
 // Universal Banner Media Component (Supports .webm, .mp4, YouTube, Giphy, Shutterstock, Cloudinary, etc.)
@@ -335,14 +351,9 @@ const BannerUniversalMedia = ({
       return <Html5Video src={normalizedSource} style={style} />;
     }
     return (
-      <ExpoAvVideo
-        source={{ uri: normalizedSource }}
+      <NativeExpoVideo
+        source={normalizedSource}
         style={[style, StyleSheet.absoluteFill]}
-        resizeMode={ResizeMode.COVER}
-        isLooping
-        shouldPlay
-        isMuted
-        useNativeControls={false}
       />
     );
   }
@@ -846,9 +857,11 @@ const ProductCardV2 = ({ product, theme, badges, isGrid, config }: any) => {
       
       {/* Product Image */}
       <SafeImage
-        uri={product.images?.[0] || product.image || product.imageUrl}
+        uri={getProductImage(product)}
         style={[styles_card.productImageV2, { width: '100%', height: 170 }]}
         resizeMode="cover"
+        fallbackEmoji={product.emoji}
+        fallbackText={product.name}
       />
       
       {/* Product Info */}
@@ -899,7 +912,7 @@ const ProductCardV2 = ({ product, theme, badges, isGrid, config }: any) => {
 };
 
 // Banner Carousel:
-const BannerCarousel = ({ banners }: { banners: any[] }) => {
+const BannerCarousel = React.memo(({ banners }: { banners: any[] }) => {
   const [current, setCurrent] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
   
@@ -982,7 +995,7 @@ const BannerCarousel = ({ banners }: { banners: any[] }) => {
       )}
     </View>
   );
-};
+});
 
 const styles_banner = StyleSheet.create({
   bannerContainer: { marginBottom: 12, overflow: 'hidden', position: 'relative' },
@@ -1034,7 +1047,7 @@ const styles_banner = StyleSheet.create({
   dotInactive: { backgroundColor: 'rgba(255,255,255,0.5)', width: 5 },
 });
 
-const TrustBadges = () => (
+const TrustBadges = React.memo(() => (
   <View className="flex-row justify-between bg-zinc-50 px-5 py-4 border-t border-b border-zinc-100 mb-6 mt-2">
     {[
       { icon: <HugeIcon icon={TruckIcon} size={24} color="#008B45" />, title: 'Free Delivery', sub: 'First 3 orders' },
@@ -1050,10 +1063,10 @@ const TrustBadges = () => (
       </View>
     ))}
   </View>
-);
+));
 
 // Colorful Section Card Component:
-const SectionCard = ({ layout }: { layout: any }) => {
+const SectionCard = React.memo(({ layout }: { layout: any }) => {
   const dispatch = useDispatch();
   const navigation = useNavigation<any>();
   const [products, setProducts] = useState<any[]>([]);
@@ -1176,9 +1189,11 @@ const SectionCard = ({ layout }: { layout: any }) => {
                 {/* White top half — product image */}
                 <View style={styles_carousel.imageWrap}>
                   <SafeImage
-                    uri={product.images?.[0] || product.image || product.imageUrl}
+                    uri={getProductImage(product)}
                     style={styles_carousel.image}
                     resizeMode="cover"
+                    fallbackEmoji={product.emoji}
+                    fallbackText={product.name}
                   />
                 </View>
 
@@ -1317,7 +1332,7 @@ const SectionCard = ({ layout }: { layout: any }) => {
       {InnerContent}
     </View>
   );
-};
+});
 
 const CATEGORY_ICONS: Record<string, any> = {
   'fashion': { icon: '👗', color: '#FFE4E4', label: 'Fashion' },
@@ -1354,103 +1369,15 @@ const getTabProducts = (tab: string, products: any[]) => {
   if (tab.toUpperCase() === 'LOCAL SHOPS') return [];
   
   const tabUpper = tab.toUpperCase().trim();
+  const targetCategory = normalizeCategoryKey(tabUpper);
 
   return products.filter(product => {
-    const cat = (product.category || product.categoryId || '').toLowerCase().trim();
-    const subcat = (product.subcategory || product.subCategoryId || '').toLowerCase().trim();
-    const name = (product.name || product.title || '').toLowerCase();
-    const tags = Array.isArray(product.tags) 
-      ? product.tags.map((t: any) => String(t).toLowerCase()) 
-      : (typeof product.tags === 'string' ? [product.tags.toLowerCase()] : []);
-
-    // Specific category flags to prevent false matches
-    const isWomenSpecific = 
-      cat === 'women' || cat === 'women_western' || cat === 'kurti_saree' || cat === 'lingerie' ||
-      cat.startsWith('women') || cat.includes('saree') || cat.includes('kurti') || cat.includes('lehenga') ||
-      subcat.includes('saree') || subcat.includes('kurti') || subcat.includes('western') || subcat.includes('lingerie') ||
-      name.includes('saree') || name.includes('kurti') || name.includes('lehenga') || name.includes('dupatta') || name.includes('salwar') ||
-      tags.some((t: string) => t === 'women' || t.includes('saree') || t.includes('kurti') || t.includes('lehenga'));
-
-    const isElectronicsSpecific = 
-      cat === 'electronics' || cat === 'gadgets' || cat === 'audio' || cat === 'mobile_acc' || cat === 'smartwatch' || cat === 'appliances' ||
-      cat.includes('elect') || cat.includes('gadget') ||
-      subcat.includes('audio') || subcat.includes('earbud') || subcat.includes('cable') || subcat.includes('charger') || subcat.includes('smartwatch') || subcat.includes('appliances') ||
-      name.includes('earbud') || name.includes('bluetooth') || name.includes('headphone') || name.includes('smartwatch') || name.includes('charger') || name.includes('usb') ||
-      tags.some((t: string) => t.includes('electronics') || t.includes('gadget') || t.includes('audio') || t.includes('bluetooth'));
-
-    const isKidsSpecific = 
-      !isElectronicsSpecific && !isWomenSpecific && (
-        cat === 'kids_toys' || cat === 'kids' || cat === 'toys' || cat === 'baby' || cat === 'babycare' ||
-        subcat.includes('kid') || subcat.includes('toy') || subcat.includes('baby') || subcat.includes('school') ||
-        tags.some((t: string) => t === 'kids' || t === 'toys' || t === 'baby')
-      );
-
-    const isBeautySpecific = 
-      !isElectronicsSpecific && (
-        cat === 'beauty' || cat === 'beauty_health' || cat === 'cosmetics' || cat === 'skincare' ||
-        subcat.includes('skincare') || subcat.includes('makeup') || subcat.includes('haircare') || subcat.includes('fragrance') || subcat.includes('perfume') || subcat.includes('grooming') ||
-        name.includes('shampoo') || name.includes('perfume') || name.includes('lipstick') || name.includes('lotion') || name.includes('serum') ||
-        tags.some((t: string) => t.includes('beauty') || t.includes('makeup') || t.includes('skincare') || t.includes('perfume'))
-      );
-
-    const isGrocerySpecific = 
-      !isElectronicsSpecific && !isBeautySpecific && (
-        cat === 'grocery' || cat === 'groceries' || cat === 'fruits_veg' || cat === 'dairy' || cat === 'spices' || cat === 'staples' || cat === 'food' ||
-        cat.includes('groc') ||
-        subcat.includes('fruit') || subcat.includes('veg') || subcat.includes('dairy') || subcat.includes('ghee') || subcat.includes('spice') || subcat.includes('staple') || subcat.includes('atta') || subcat.includes('rice') ||
-        name.includes('ghee') || name.includes('oil') || name.includes('atta') || name.includes('rice') || name.includes('masala') || name.includes('tea') || name.includes('biscuit') ||
-        tags.some((t: string) => t.includes('grocery') || t.includes('food') || t.includes('ghee') || t.includes('spice'))
-      );
-
-    const isJewellerySpecific = 
-      cat === 'jewellery' || cat === 'jewellery_accessories' || cat === 'jewelry' ||
-      subcat.includes('jewel') || subcat.includes('necklace') || subcat.includes('ring') || subcat.includes('earring') || subcat.includes('bangle') ||
-      name.includes('necklace') || name.includes('earring') || name.includes('pendant') || name.includes('bangle') || name.includes('mangalsutra') ||
-      tags.some((t: string) => t.includes('jewellery') || t.includes('jewelry') || t.includes('gold') || t.includes('silver'));
-
-    const isMenSpecific = 
-      !isWomenSpecific && !isKidsSpecific && !isElectronicsSpecific && !isBeautySpecific && !isGrocerySpecific && !isJewellerySpecific && (
-        cat === 'men' || cat === 'mens' || cat === 'menswear' || cat === 'men_fashion' ||
-        subcat === 'casual' || subcat === 'ethnic' || subcat === 'menswear' || subcat.includes('men') ||
-        name.includes('men ') || name.startsWith("men's") || name.startsWith("mens") || name.includes("men's shirt") || name.includes("men's t-shirt") || name.includes("men kurta") ||
-        tags.some((t: string) => t === 'men' || t === 'mens' || t === 'menswear' || t === 'male')
-      );
-
-    switch (tabUpper) {
-      case 'MEN':
-        return isMenSpecific;
-
-      case 'WOMEN':
-        return isWomenSpecific;
-
-      case 'KIDS':
-        return isKidsSpecific;
-
-      case 'BEAUTY':
-        return isBeautySpecific;
-
-      case 'GROCERIES':
-      case 'GROCERY':
-        return isGrocerySpecific;
-
-      case 'ELECTRONICS':
-      case 'GADGETS':
-        return isElectronicsSpecific;
-
-      case 'JEWELLERY':
-      case 'JEWELRY':
-        return isJewellerySpecific;
-
-      default: {
-        const tabLower = tab.toLowerCase().trim();
-        return cat === tabLower || subcat === tabLower || tags.includes(tabLower);
-      }
-    }
+    return doesProductBelongToCategory(product, targetCategory);
   });
 };
 
 // Flash Deal Section Component
-const FlashDealSection = ({ deals, products }: { deals: any[], products: any[] }) => {
+const FlashDealSection = React.memo(({ deals, products }: { deals: any[], products: any[] }) => {
   return (
     <View className="mb-6">
       {deals.map((deal: any) => {
@@ -1476,11 +1403,20 @@ const FlashDealSection = ({ deals, products }: { deals: any[], products: any[] }
       })}
     </View>
   );
-};
+});
 
 export default function HomeScreen() {
   const navigation = useNavigation<any>();
-  const scrollY = useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
+  const TOP_INSET = Math.max(insets.top, Platform.OS === 'android' ? 24 : 44);
+  const TOP_CONTROLS_HEIGHT = 126;
+  const COLLAPSED_HEADER_HEIGHT = TOP_INSET + TOP_CONTROLS_HEIGHT;
+  const TOTAL_HEADER_HEIGHT = BANNER_HEIGHT + COLLAPSED_HEADER_HEIGHT;
+
+  const scrollY = useSharedValue(0);
+  const scrollHandlerY = useAnimatedScrollHandler((event) => {
+    scrollY.value = event.contentOffset.y;
+  });
   const [activeTab, setActiveTab] = useState('ALL');
   const [selectedCategory, setSelectedCategory] = useState('all');
 
@@ -1543,12 +1479,28 @@ export default function HomeScreen() {
     opacity: tabFadeOpacity.value,
   }));
 
+  const mainScrollRef = useRef<any>(null);
+
   const handleTabChange = (newTab: string) => {
     if (newTab === activeTab) return;
     tabFadeOpacity.value = withTiming(0, { duration: 120 });
     setTimeout(() => {
       setActiveTab(newTab);
       tabFadeOpacity.value = withTiming(1, { duration: 250 });
+      // If user is scrolled down into products, smoothly scroll to top of feed
+      if (scrollY.value > (BANNER_HEIGHT + 105)) {
+        if (mainScrollRef.current?.scrollTo) {
+          mainScrollRef.current.scrollTo({
+            y: BANNER_HEIGHT + 105,
+            animated: true,
+          });
+        } else if (mainScrollRef.current?.scrollToOffset) {
+          mainScrollRef.current.scrollToOffset({
+            offset: BANNER_HEIGHT + 105,
+            animated: true,
+          });
+        }
+      }
     }, 120);
   };
 
@@ -1560,7 +1512,10 @@ export default function HomeScreen() {
   const flatListRef = useRef<FlatList>(null);
   const activeIndexRef = useRef(0);
   const [activeTopIndex, setActiveTopIndex] = useState(0);
-  const scrollX = useRef(new Animated.Value(0)).current;
+  const scrollX = useSharedValue(0);
+  const scrollHandlerX = useAnimatedScrollHandler((event) => {
+    scrollX.value = event.contentOffset.x;
+  });
 
   // Live Firebase syncing states
   const [promoOffers, setPromoOffers] = useState<any[]>([]);
@@ -1616,8 +1571,6 @@ export default function HomeScreen() {
      loadingCategories ||
      (isAuthenticated && (profileLoading || !profile)));
 
-  const COLLAPSED_HEADER_HEIGHT = 140;
-
   const defaultHeaderSlide = {
     id: 'default_hero_video_offer',
     title: 'Limited Time Offers Just For You!',
@@ -1645,31 +1598,47 @@ export default function HomeScreen() {
     return [defaultHeaderSlide];
   }, [tabLayout, promoOffers]);
 
-  const headerHeight = scrollY.interpolate({
-    inputRange: [0, BANNER_HEIGHT],
-    outputRange: [TOTAL_HEADER_HEIGHT, COLLAPSED_HEADER_HEIGHT],
-    extrapolate: 'clamp'
+  // ── UI-THREAD Sticky Category Tab Bar (Locks smoothly right under the collapsed header) ──
+  const stickyTabBarAnimStyle = useAnimatedStyle(() => {
+    const isSticky = scrollY.value >= (BANNER_HEIGHT + 115);
+    return {
+      position: 'absolute',
+      top: COLLAPSED_HEADER_HEIGHT,
+      left: 0,
+      right: 0,
+      zIndex: 9999,
+      elevation: 9999,
+      opacity: isSticky ? 1 : 0,
+      transform: [
+        { translateY: isSticky ? 0 : -8 },
+      ],
+      pointerEvents: isSticky ? 'auto' : 'none',
+    };
   });
 
-  const headerBorderRadius = scrollY.interpolate({
-    inputRange: [0, 80],
-    outputRange: [32, 0],
-    extrapolate: 'clamp'
-  });
+  // Collapsed header solid backdrop so when scrolled, location/search row is 100% crisp without video bleed
+  const headerCollapsedBackdropStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [10, 60], [0, 1], Extrapolation.CLAMP),
+  }));
 
-  const headerShadowOpacity = scrollY.interpolate({
-    inputRange: [0, 60],
-    outputRange: [0, 0.2],
-    extrapolate: 'clamp'
-  });
+  // Promo carousel area gently dims as it scrolls out of view under the header
+  const headerPromoStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [0, BANNER_HEIGHT * 0.75], [1, 0.25], Extrapolation.CLAMP),
+  }));
 
-  const headerBackgroundColor = headerTopSlides.length >= 2
-    ? scrollX.interpolate({
-        inputRange: headerTopSlides.map((_, index) => index * SCREEN_WIDTH),
-        outputRange: headerTopSlides.map(offer => offer.bgColor || '#008B45'),
-        extrapolate: 'clamp',
-      })
-    : (headerTopSlides[0]?.bgColor || '#008B45');
+  // Header background color follows the active top slide (UI thread)
+  const headerBackgroundStyle = useAnimatedStyle(() => {
+    if (headerTopSlides.length >= 2) {
+      return {
+        backgroundColor: interpolateColor(
+          scrollX.value,
+          headerTopSlides.map((_, index) => index * SCREEN_WIDTH),
+          headerTopSlides.map(offer => offer.bgColor || '#008B45')
+        ),
+      };
+    }
+    return { backgroundColor: headerTopSlides[0]?.bgColor || '#008B45' };
+  });
 
   // Automatic scrolling timer for header top banners
   useEffect(() => {
@@ -1846,15 +1815,40 @@ export default function HomeScreen() {
     })
   ];
 
-  const filteredProducts = selectedCategory === 'all' 
-    ? products 
-    : products.filter(p => {
-        const cat = typeof p.category === 'string' ? p.category.toLowerCase() : '';
-        const sel = selectedCategory.toLowerCase();
-        return cat === sel;
-      });
+  // Live dynamic categories linked 100% directly to Firestore admin updates
+  const displayCategories = React.useMemo(() => {
+    if (!categoriesData || categoriesData.length === 0) {
+      return [];
+    }
 
-  const currentTabProducts = getTabProducts(activeTab, filteredProducts);
+    return categoriesData
+      .filter((c: any) => c.status !== 'inactive')
+      .map((c: any, index: number) => ({
+        id: c.id,
+        label: c.name || c.label || '',
+        imageUrl: c.imageUrl || c.image || c.iconUrl,
+        image: c.image || c.imageUrl,
+        icon: c.icon || '🛍️',
+        color: c.color || '#F8FAFC',
+        order: typeof c.order === 'number' ? c.order : typeof c.sortOrder === 'number' ? c.sortOrder : index,
+      }))
+      .sort((a: any, b: any) => a.order - b.order);
+  }, [categoriesData]);
+
+  const filteredProducts = React.useMemo(() => {
+    return selectedCategory === 'all'
+      ? products
+      : products.filter(p => {
+          const cat = typeof p.category === 'string' ? p.category.toLowerCase() : '';
+          const sel = selectedCategory.toLowerCase();
+          return cat === sel;
+        });
+  }, [products, selectedCategory]);
+
+  const currentTabProducts = React.useMemo(
+    () => getTabProducts(activeTab, filteredProducts),
+    [activeTab, filteredProducts]
+  );
 
   const getHomepageSections = () => {
     const defaultSections = [
@@ -2049,9 +2043,15 @@ export default function HomeScreen() {
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               {filteredProducts.length === 0 ? (
-                <Text style={{ textAlign: 'center', width: '100%', color: '#64748B', paddingVertical: 20, fontFamily: 'Poppins_500Medium' }}>
-                  No products found
-                </Text>
+                <View style={{ width: '100%', alignItems: 'center', paddingVertical: 36, paddingHorizontal: 20 }}>
+                  <Text style={{ fontSize: 44, marginBottom: 8 }}>📍</Text>
+                  <Text style={{ fontSize: 16, fontFamily: 'Poppins_700Bold', color: '#1E293B', textAlign: 'center', marginBottom: 4 }}>
+                    Coming soon to {userCity || 'your area'}!
+                  </Text>
+                  <Text style={{ fontSize: 12, fontFamily: 'Poppins_500Medium', color: '#64748B', textAlign: 'center', maxWidth: 280, lineHeight: 18 }}>
+                    We are actively onboarding verified local shops and boutiques in {userCity || 'your city'}. Check back shortly!
+                  </Text>
+                </View>
               ) : (
                 <>
                   <View style={{ width: '48%' }}>
@@ -2079,9 +2079,15 @@ export default function HomeScreen() {
           </View>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             {filteredProducts.length === 0 ? (
-              <Text style={{ textAlign: 'center', width: '100%', color: '#64748B', paddingVertical: 20, fontFamily: 'Poppins_500Medium' }}>
-                No products found
-              </Text>
+              <View style={{ width: '100%', alignItems: 'center', paddingVertical: 36, paddingHorizontal: 20 }}>
+                <Text style={{ fontSize: 44, marginBottom: 8 }}>📍</Text>
+                <Text style={{ fontSize: 16, fontFamily: 'Poppins_700Bold', color: '#1E293B', textAlign: 'center', marginBottom: 4 }}>
+                  Coming soon to {userCity || 'your area'}!
+                </Text>
+                <Text style={{ fontSize: 12, fontFamily: 'Poppins_500Medium', color: '#64748B', textAlign: 'center', maxWidth: 280, lineHeight: 18 }}>
+                  We are actively onboarding verified local shops and boutiques in {userCity || 'your city'}. Check back shortly!
+                </Text>
+              </View>
             ) : (
               <>
                 <View style={{ width: '48%' }}>
@@ -2140,41 +2146,31 @@ export default function HomeScreen() {
       <View style={{ paddingTop: 0, paddingBottom: 80, backgroundColor: theme.gradient[0] }}>
         {/* ── 1. THEME TOP BAR (Search Bar + Sub-category Pills matching Zepto Super Mall) ── */}
         <View style={{ paddingTop: 6, paddingBottom: 12, backgroundColor: theme.gradient[0] }}>
-          {/* Integrated Search Bar inside theme background */}
-          <View style={{ paddingHorizontal: 14, marginBottom: 10 }}>
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() => navigation.navigate('Search')}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                backgroundColor: '#FFFFFF',
-                borderRadius: 14,
-                paddingHorizontal: 12,
-                paddingVertical: 9,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 4,
-                elevation: 3,
-                gap: 8,
-              }}
-            >
-              <HugeIcon icon={Search02Icon} size={18} color="#64748B" />
-              <Text style={{ flex: 1, fontSize: 12, color: '#64748B', fontFamily: 'Poppins_400Regular' }}>
-                {activeTab === 'WOMEN' ? 'Search for "Saree, Kurti, Western, Heels"...' :
-                 activeTab === 'MEN' ? 'Search for "Shirts, Kurta, Shoes, Watches"...' :
-                 activeTab === 'KIDS' ? 'Search for "Toys, Baby Wear, Games"...' :
-                 activeTab === 'BEAUTY' ? 'Search for "Lipstick, Serum, Perfumes"...' :
-                 activeTab === 'GROCERIES' ? 'Search for "Milk, Atta, Ghee, Vegetables"...' :
-                 activeTab === 'ELECTRONICS' ? 'Search for "Earbuds, Smartwatch, Charger"...' :
-                 'Search for "Gift for brother, Kurti, Groceries"...'}
-              </Text>
-              <TouchableOpacity onPress={() => setIsCameraModalOpen(true)}>
-                <Text style={{ fontSize: 16 }}>📸</Text>
+          {/* Trending chips (replaces duplicate search bar) */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14, gap: 8 }}>
+            {(activeTab === 'WOMEN' ? ['Saree', 'Kurti', 'Heels', 'Lehenga', 'Jewellery'] :
+              activeTab === 'MEN' ? ['Shirts', 'Kurta', 'Shoes', 'Watches'] :
+              activeTab === 'KIDS' ? ['Toys', 'Baby Wear', 'Games'] :
+              activeTab === 'BEAUTY' ? ['Lipstick', 'Serum', 'Perfumes'] :
+              activeTab === 'GROCERIES' ? ['Milk', 'Atta', 'Ghee', 'Vegetables'] :
+              activeTab === 'ELECTRONICS' ? ['Earbuds', 'Smartwatch', 'Charger'] :
+              ['Kurti', 'Groceries', 'Gifts']).map((chip, i) => (
+              <TouchableOpacity
+                key={`trend_${i}`}
+                onPress={() => navigation.navigate('Search')}
+                style={{
+                  backgroundColor: 'rgba(255,255,255,0.18)',
+                  borderRadius: 20,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.3)',
+                }}
+              >
+                <Text style={{ fontSize: 11, color: '#FFFFFF', fontFamily: 'Poppins_400Regular' }}>#{chip}</Text>
               </TouchableOpacity>
-            </TouchableOpacity>
-          </View>
+            ))}
+          </ScrollView>
 
           {/* Subcategory Pills Row */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14, gap: 10 }}>
@@ -2557,138 +2553,195 @@ export default function HomeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFFFF', minHeight: '100%' }}>
-      <Animated.View style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        height: headerHeight,
-        backgroundColor: '#1D58EE',
-        borderBottomLeftRadius: headerBorderRadius,
-        borderBottomRightRadius: headerBorderRadius,
-        overflow: 'hidden',
-        zIndex: 999,
-        elevation: 999,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: headerShadowOpacity,
-        shadowRadius: 8,
-      }}>
-        {/* Solid vibrant background so the curved shape NEVER flashes white during buffering */}
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: headerBackgroundColor || '#1D58EE' }]} />
+      {/* ── 1. STATIC PINNED HEADER (Location, Search Bar & Quick Pills) ── */}
+      <View
+        pointerEvents="box-none"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 1000,
+          elevation: 1000,
+        }}
+      >
+        {/* Solid dark backdrop that smoothly fades in as user scrolls down */}
+        <Reanimated.View 
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: '#0F172A' },
+            headerCollapsedBackdropStyle
+          ]} 
+        />
 
-        {/* 🎬 100% FULL-CONTAINER SHAPE ANIMATED VIDEO OR MEDIA BACKGROUND */}
-        {activeHeaderMedia ? (
-          <View style={StyleSheet.absoluteFill}>
-            <BannerUniversalMedia
-              source={activeHeaderMedia}
-              isVideo={activeHeaderIsVideo}
-              style={StyleSheet.absoluteFill}
-            />
-            {/* Subtle scrim for crystal-clear readability of location & search bar */}
-            <LinearGradient
-              colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.25)']}
-              style={StyleSheet.absoluteFill}
-            />
-          </View>
-        ) : heroAd?.bgType === 'lottie' && heroAd?.bgUrl ? (
-          <SafeLottieView
-            source={{ uri: heroAd.bgUrl }}
-            autoPlay
-            loop
-            resizeMode="cover"
-            style={StyleSheet.absoluteFill}
-          />
-        ) : heroAd?.bgType === 'animated_gradient' && (heroAd?.gradientColors || heroAd?.bgColors) ? (
-          <AnimatedGradientBackground colors={heroAd.gradientColors || heroAd.bgColors} />
-        ) : null}
-
-        <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: 'transparent' }}>
-          {/* Static Top Controls (Location & Search Bar) with 12px Horizontal Padding */}
-          <View style={{ paddingHorizontal: 12 }}>
-            {/* ── STATIC HEADER CONTENT (Location & Search Bar) ── */}
-            {/* Location & Rewards Row */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, marginTop: 4 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 16 }}>
-                <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 6, borderRadius: 20, marginRight: 8 }}>
-                  <HugeIcon icon={Home02Icon} size={16} color="#FFFFFF" />
-                </View>
-                <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+        <View style={{ paddingTop: TOP_INSET, paddingHorizontal: 12, paddingBottom: 6 }}>
+          {/* Location & Rewards Row */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, marginTop: 4 }}>
+            <TouchableOpacity 
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('Addresses')}
+              style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 12 }}
+            >
+              <View style={{ backgroundColor: 'rgba(255,255,255,0.22)', padding: 6, borderRadius: 12, marginRight: 8 }}>
+                <HugeIcon icon={Home02Icon} size={16} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
                   <Text 
-                    style={{ color: '#FFFFFF', fontFamily: 'Poppins_600SemiBold', fontSize: 13, marginRight: 4, flexShrink: 1 }}
+                    style={{ color: '#FFFFFF', fontFamily: 'Poppins_700Bold', fontSize: 13 }}
                     numberOfLines={1}
-                    ellipsizeMode="tail"
                   >
-                    {profile?.location ? `Home - ${profile.location}` : (profile?.city || 'Swaroop Nagar, Thane')}
+                    {profile?.location ? `Home • ${profile.location}` : (profile?.city ? `Home • ${profile.city}` : 'Home • Thane')}
                   </Text>
                   <HugeIcon icon={ChevronDownIcon} size={14} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-              
-              <View style={{ backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
-                <Text style={{ color: '#FFD700', marginRight: 4, fontSize: 12 }}>⚡</Text>
-                <Text style={{ color: '#FFFFFF', fontFamily: 'Poppins_700Bold', fontSize: 12 }}>0</Text>
-              </View>
-            </View>
-
-            {/* Unified Search & Hot Deals Action */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 10 }}>
-              <TouchableOpacity 
-                activeOpacity={0.9}
-                onPress={() => navigation.navigate('Search')}
-                style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 12, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, height: 48, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 }}
-              >
-                <HugeIcon icon={Search02Icon} size={18} color="#A1A1AA" />
-                <View pointerEvents="none" style={{ flex: 1, marginLeft: 10, height: '100%', justifyContent: 'center' }}>
-                  <TextInput
-                    style={{ fontSize: 14, fontFamily: 'Poppins_400Regular', color: '#1C1C1C' }}
-                    placeholder={heroAd?.searchPlaceholder || 'Search "milk", "kurta", "butter"...'}
-                    placeholderTextColor="#A1A1AA"
-                    editable={false}
-                  />
                 </View>
-                <TouchableOpacity
-                  onPress={() => setIsCameraModalOpen(true)}
-                  style={{ borderLeftWidth: 1, borderLeftColor: '#E4E4E7', paddingLeft: 10 }}
-                >
-                   <HugeIcon icon={Camera02Icon} size={20} color="#008B45" />
-                </TouchableOpacity>
-              </TouchableOpacity>
-
-              {/* ⚡ Hot Deals & Offers Button (Replaced Confusing QR Scanner) */}
-              <TouchableOpacity
-                onPress={() => navigation.navigate('CategoryProducts', { categoryId: 'men', categoryName: '🔥 Today Hot Deals' })}
-                style={{
-                  backgroundColor: '#FFD700',
-                  borderRadius: 12,
-                  width: 48,
-                  height: 48,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.15,
-                  shadowRadius: 3,
-                  elevation: 3,
-                }}
-              >
-                <HugeIcon icon={FlashIcon} size={20} color="#000000" fill="#000000" />
-                <View style={{ position: 'absolute', top: -3, right: -3, backgroundColor: '#EF4444', borderRadius: 6, paddingHorizontal: 4, paddingVertical: 1 }}>
-                  <Text style={{ color: '#FFFFFF', fontSize: 8, fontFamily: 'Poppins_700Bold' }}>HOT</Text>
-                </View>
-              </TouchableOpacity>
+                <Text style={{ color: '#FDE047', fontFamily: 'Poppins_600SemiBold', fontSize: 10 }}>
+                  ⚡ Delivery in 20–30 mins
+                </Text>
+              </View>
+            </TouchableOpacity>
+            
+            <View style={{ backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' }}>
+              <Text style={{ color: '#FFD700', marginRight: 4, fontSize: 12 }}>⚡</Text>
+              <Text style={{ color: '#FFFFFF', fontFamily: 'Poppins_700Bold', fontSize: 12 }}>0 Coins</Text>
             </View>
           </View>
 
-          {/* ── PROMOTIONAL BANNER CAROUSEL (Full Width Edge-to-Edge with Zero Padding Gaps) ── */}
-          <Animated.View style={{
-            flex: 1,
-            opacity: scrollY.interpolate({ inputRange: [0, 80], outputRange: [1, 0], extrapolate: 'clamp' }),
-            transform: [{
-              translateY: scrollY.interpolate({ inputRange: [0, 100], outputRange: [0, -20], extrapolate: 'clamp' })
-            }],
+          {/* Unified Search & Hot Deals Action */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 10 }}>
+            <TouchableOpacity 
+              activeOpacity={0.9}
+              onPress={() => navigation.navigate('Search')}
+              style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 12, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, height: 46, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 }}
+            >
+              <HugeIcon icon={Search02Icon} size={18} color="#A1A1AA" />
+              <View pointerEvents="none" style={{ flex: 1, marginLeft: 10, height: '100%', justifyContent: 'center' }}>
+                <TextInput
+                  style={{ fontSize: 13.5, fontFamily: 'Poppins_400Regular', color: '#1C1C1C' }}
+                  placeholder={heroAd?.searchPlaceholder || 'Search "milk", "kurta", "butter"...'}
+                  placeholderTextColor="#94A3B8"
+                  editable={false}
+                />
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsCameraModalOpen(true)}
+                style={{ borderLeftWidth: 1, borderLeftColor: '#E4E4E7', paddingLeft: 10 }}
+              >
+                 <HugeIcon icon={Camera02Icon} size={20} color="#008B45" />
+              </TouchableOpacity>
+            </TouchableOpacity>
+
+            {/* ⚡ Hot Deals & Offers Button */}
+            <TouchableOpacity
+              onPress={() => navigation.navigate('CategoryProducts', { categoryId: 'all', categoryName: '🔥 Today Hot Deals' })}
+              style={{
+                backgroundColor: '#FFD700',
+                borderRadius: 12,
+                width: 46,
+                height: 46,
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.15,
+                shadowRadius: 3,
+                elevation: 3,
+              }}
+            >
+              <HugeIcon icon={FlashIcon} size={20} color="#000000" fill="#000000" />
+              <View style={{ position: 'absolute', top: -3, right: -3, backgroundColor: '#EF4444', borderRadius: 6, paddingHorizontal: 4, paddingVertical: 1 }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 8, fontFamily: 'Poppins_700Bold' }}>HOT</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {/* Quick Action Discovery Pills */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('CategoryProducts', { categoryId: 'all', categoryName: '🏷️ Best Offers' })}
+              style={{ backgroundColor: 'rgba(255,255,255,0.22)', paddingHorizontal: 10, paddingVertical: 3.5, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontFamily: 'Poppins_700Bold' }}>🏷️ Offers</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('CategoryProducts', { categoryId: 'grocery', categoryName: '⚡ 15-Min Delivery' })}
+              style={{ backgroundColor: 'rgba(255,255,255,0.22)', paddingHorizontal: 10, paddingVertical: 3.5, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontFamily: 'Poppins_700Bold' }}>⚡ 15-Min</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('MainTabs', { screen: 'LocalShops' })}
+              style={{ backgroundColor: 'rgba(255,255,255,0.22)', paddingHorizontal: 10, paddingVertical: 3.5, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontFamily: 'Poppins_700Bold' }}>🏪 Local Shops</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+        <Reanimated.ScrollView 
+          ref={mainScrollRef}
+          className="flex-1" 
+          showsVerticalScrollIndicator={false} 
+          contentContainerStyle={{ paddingTop: 0 }}
+          onScroll={scrollHandlerY}
+          scrollEventThrottle={16}
+        >
+          {/* ── 2. HERO BANNER & VIDEO MEDIA SECTION (Scrolls naturally on GPU, Zero relayout) ── */}
+          <View style={{
+            width: SCREEN_WIDTH,
+            height: TOTAL_HEADER_HEIGHT,
+            backgroundColor: '#1D58EE',
+            borderBottomLeftRadius: 36,
+            borderBottomRightRadius: 36,
+            overflow: 'hidden',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowRadius: 8,
+            elevation: 4,
           }}>
-              <Animated.FlatList
+            {/* Solid vibrant background so the curved shape NEVER flashes white during buffering */}
+            <Reanimated.View style={[StyleSheet.absoluteFill, headerBackgroundStyle]} />
+
+            {/* 🎬 100% FULL-CONTAINER SHAPE ANIMATED VIDEO OR MEDIA BACKGROUND */}
+            {activeHeaderMedia ? (
+              <View style={StyleSheet.absoluteFill}>
+                <BannerUniversalMedia
+                  source={activeHeaderMedia}
+                  isVideo={activeHeaderIsVideo}
+                  style={StyleSheet.absoluteFill}
+                />
+                {/* Subtle scrim for crystal-clear readability of location & search bar */}
+                <LinearGradient
+                  colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.25)']}
+                  style={StyleSheet.absoluteFill}
+                />
+              </View>
+            ) : heroAd?.bgType === 'lottie' && heroAd?.bgUrl ? (
+              <SafeLottieView
+                source={{ uri: heroAd.bgUrl }}
+                autoPlay
+                loop
+                resizeMode="cover"
+                style={StyleSheet.absoluteFill}
+              />
+            ) : heroAd?.bgType === 'animated_gradient' && (heroAd?.gradientColors || heroAd?.bgColors) ? (
+              <AnimatedGradientBackground colors={heroAd.gradientColors || heroAd.bgColors} />
+            ) : null}
+
+            {/* Spacer equal to COLLAPSED_HEADER_HEIGHT so carousel content starts below the pinned search controls */}
+            <View style={{ height: COLLAPSED_HEADER_HEIGHT }} />
+
+            {/* ── PROMOTIONAL BANNER CAROUSEL ── */}
+            <Reanimated.View style={[{ height: BANNER_HEIGHT }, headerPromoStyle]}>
+              <Reanimated.FlatList
                 ref={flatListRef}
                 data={headerTopSlides}
                 keyExtractor={(item, index) => item.id || `top_slide_${index}`}
@@ -2696,7 +2749,7 @@ export default function HomeScreen() {
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
                 bounces={false}
-                onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: false })}
+                onScroll={scrollHandlerX}
                 scrollEventThrottle={16}
                 onMomentumScrollEnd={handleScrollEnd}
                 getItemLayout={(data, index) => (
@@ -2823,13 +2876,13 @@ export default function HomeScreen() {
                   );
                 }}
               />
-            </Animated.View>
+            </Reanimated.View>
 
             {/* Carousel Pagination Dots */}
             {headerTopSlides.length > 1 && (
-              <View style={{
+              <Reanimated.View style={[{
                 position: 'absolute',
-                bottom: 8,
+                bottom: 12,
                 left: 0,
                 right: 0,
                 flexDirection: 'row',
@@ -2837,7 +2890,7 @@ export default function HomeScreen() {
                 alignItems: 'center',
                 gap: 5,
                 zIndex: 20,
-              }}>
+              }, headerPromoStyle]}>
                 {headerTopSlides.map((_, i) => (
                   <View
                     key={i}
@@ -2849,28 +2902,19 @@ export default function HomeScreen() {
                     }}
                   />
                 ))}
-              </View>
+              </Reanimated.View>
             )}
-        </SafeAreaView>
-      </Animated.View>
+          </View>
 
-      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
-        <Animated.ScrollView 
-          className="flex-1" 
-          showsVerticalScrollIndicator={false} 
-          contentContainerStyle={{ paddingTop: TOTAL_HEADER_HEIGHT }}
-          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
-          scrollEventThrottle={16}
-        >
-          {/* ── CATEGORY ICONS ── */}
+          {/* ── 3. CATEGORY ICONS ── */}
           <View className="bg-white" style={{ paddingTop: 12 }}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: 16, marginTop: 4, paddingBottom: 8 }}>
-              {CATEGORIES.map((cat, idx) => (
+              {displayCategories.map((cat, idx) => (
                 <AnimatedCategoryIcon 
-                  key={cat.id} 
+                  key={cat.id || `cat_${idx}`} 
                   cat={cat} 
                   idx={idx} 
-                  onPress={() => navigation.navigate('CategoryProducts', { categoryId: cat.id, categoryName: cat.label })} 
+                  onPress={() => navigation.navigate('CategoryProducts', { categoryId: cat.id, categoryName: (cat.label || '').replace(/[\n\r]/g, ' ') })} 
                 />
               ))}
             </ScrollView>
@@ -2881,8 +2925,18 @@ export default function HomeScreen() {
           <Reanimated.View style={[{ flex: 1 }, animatedTabStyle]}>
             {renderActiveTabContent()}
           </Reanimated.View>
-        </Animated.ScrollView>
+        </Reanimated.ScrollView>
       </View>
+
+      {/* ── 4. STICKY CATEGORY TAB BAR (Stays pinned under header on scroll, rendered on top of DOM) ── */}
+      <Reanimated.View style={stickyTabBarAnimStyle}>
+        <HomeTabBar 
+          activeTab={activeTab} 
+          onTabChange={handleTabChange} 
+          accentColor={TAB_THEMES[activeTab]?.accent} 
+          isSticky={true}
+        />
+      </Reanimated.View>
 
       {/* ── CAMERA / PHOTO VISUAL SEARCH MODAL ── */}
       <Modal

@@ -14,7 +14,7 @@ export default function CartScreen() {
   const dispatch = useDispatch();
   const navigation = useNavigation<any>();
   
-  const { items, total, count } = useSelector((state: RootState) => state.cart);
+  const { items, total, count, tax = 0 } = useSelector((state: RootState) => state.cart);
   
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
@@ -24,7 +24,7 @@ export default function CartScreen() {
 
   // Derived Pricing
   const deliveryFee = total > 499 ? 0 : 40;
-  const grandTotal = total - discountAmount + deliveryFee;
+  const grandTotal = Math.max(0, total + tax - discountAmount + deliveryFee);
 
   useEffect(() => {
     // Re-validate coupon if cart total changes
@@ -239,6 +239,13 @@ export default function CartScreen() {
           <Text className="text-[#1C1C1C] font-black text-sm">₹{total}</Text>
         </View>
 
+        {tax > 0 && (
+          <View className="flex-row justify-between mb-3">
+            <Text className="text-zinc-500 font-bold text-sm">Taxes & GST</Text>
+            <Text className="text-[#1C1C1C] font-black text-sm">₹{tax}</Text>
+          </View>
+        )}
+
         {discountAmount > 0 && (
           <View className="flex-row justify-between mb-3">
             <Text className="text-green-600 font-bold text-sm">Discount</Text>
@@ -317,7 +324,7 @@ export default function CartScreen() {
           {/* Sticky Bottom Bar */}
           <View className="absolute bottom-0 w-full bg-white px-5 py-4 border-t border-zinc-100 shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">
             <TouchableOpacity 
-              onPress={() => navigation.navigate('Checkout', { grandTotal, discountAmount, deliveryFee, appliedCoupon })}
+              onPress={() => navigation.navigate('Checkout', { grandTotal, subtotal: total, tax, discountAmount, deliveryFee, appliedCoupon })}
               className="bg-[#008B45] rounded-xl flex-row items-center justify-between px-5 h-14 shadow-md"
             >
               <View>

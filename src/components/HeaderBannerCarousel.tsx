@@ -4,12 +4,47 @@ import {
   FlatList, StyleSheet, Pressable, Platform 
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { Video, ResizeMode } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { useNavigation } from '@react-navigation/native';
 import { handleSDUILink } from '../utils/sduiNavigation';
 import YoutubeVideoPlayer from '../screens/YoutubeVideoPlayer';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Native Video Loop Player via expo-video (Expo 56+)
+const NativeBannerVideo = ({ source, style, active }: { source: string; style: any; active?: boolean }) => {
+  const player = useVideoPlayer(source, p => {
+    p.loop = true;
+    p.muted = true;
+  });
+
+  // Play only while this slide is the active one; pause when scrolled away
+  useEffect(() => {
+    try {
+      if (active) {
+        player.play();
+      } else {
+        player.pause();
+      }
+    } catch (e) {}
+  }, [active, player]);
+
+  // Pause the video when the slide unmounts (scrolled far away / screen left)
+  useEffect(() => {
+    return () => {
+      try { player.pause(); } catch (e) {}
+    };
+  }, [player]);
+
+  return (
+    <VideoView
+      player={player}
+      style={style}
+      contentFit="cover"
+      nativeControls={false}
+    />
+  );
+};
 
 export interface HeroSlide {
   id?: string;
@@ -60,11 +95,13 @@ const getYoutubeId = (url: string) => {
 const UniversalMedia = ({ 
   source, 
   isVideo, 
-  style 
+  style,
+  active
 }: { 
   source: string; 
   isVideo: boolean; 
-  style: any; 
+  style: any;
+  active?: boolean;
 }) => {
   const ytId = getYoutubeId(source);
 
@@ -117,17 +154,7 @@ const UniversalMedia = ({
         />
       );
     }
-    return (
-      <Video
-        source={{ uri: source }}
-        style={style}
-        resizeMode={ResizeMode.COVER}
-        isLooping
-        shouldPlay
-        isMuted
-        useNativeControls={false}
-      />
-    );
+    return <NativeBannerVideo source={source} style={style} active={active} />;
   }
 
   // 3. High-Speed Animated GIF / WebP / Image
@@ -142,16 +169,18 @@ const UniversalMedia = ({
   );
 };
 
-export default function HeaderBannerCarousel({ slides = [], fallbackBg }: Props) {
+function HeaderBannerCarousel({ slides = [], fallbackBg }: Props) {
   const navigation = useNavigation<any>();
   const [activeIndex, setActiveIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
+  const activeIndexRef = useRef(0);
 
-  // Auto-slide every 4.5 seconds
+  // Auto-slide every 4.5 seconds (stable interval; no reset on every tick)
   useEffect(() => {
     if (!slides || slides.length <= 1) return;
     const interval = setInterval(() => {
-      const nextIndex = (activeIndex + 1) % slides.length;
+      const nextIndex = (activeIndexRef.current + 1) % slides.length;
+      activeIndexRef.current = nextIndex;
       try {
         flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
         setActiveIndex(nextIndex);
@@ -160,7 +189,7 @@ export default function HeaderBannerCarousel({ slides = [], fallbackBg }: Props)
       }
     }, 4500);
     return () => clearInterval(interval);
-  }, [activeIndex, slides]);
+  }, [slides]);
 
   const handlePress = (link?: string, title?: string) => {
     if (!link) return;
@@ -191,10 +220,11 @@ export default function HeaderBannerCarousel({ slides = [], fallbackBg }: Props)
         onMomentumScrollEnd={(e) => {
           const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
           if (index >= 0 && index < slides.length) {
+            activeIndexRef.current = index;
             setActiveIndex(index);
           }
         }}
-        renderItem={({ item }) => {
+        renderItem={({ item, index }) => {
           const rawMedia = (
             item.videoUrl || 
             item.video || 
@@ -248,6 +278,7 @@ export default function HeaderBannerCarousel({ slides = [], fallbackBg }: Props)
                   source={mediaSource} 
                   isVideo={isVideo} 
                   style={styles.fullCoverMedia} 
+                  active={activeIndex === index}
                 />
               </Pressable>
             );
@@ -265,6 +296,7 @@ export default function HeaderBannerCarousel({ slides = [], fallbackBg }: Props)
                   source={mediaSource} 
                   isVideo={isVideo} 
                   style={styles.fullCoverMedia} 
+                  active={activeIndex === index}
                 />
                 <View style={styles.gradientScrim}>
                   <View style={styles.textContainer}>
@@ -321,6 +353,7 @@ export default function HeaderBannerCarousel({ slides = [], fallbackBg }: Props)
                     source={mediaSource} 
                     isVideo={isVideo} 
                     style={styles.bannerImg} 
+                    active={activeIndex === index}
                   />
                 ) : (
                   <Text style={{ fontSize: 36 }}>{item.iconType || '🎉'}</Text>
@@ -464,3 +497,5 @@ const styles = StyleSheet.create({
   activeDot: { width: 20, backgroundColor: '#FACC15' },
   inactiveDot: { width: 5, backgroundColor: 'rgba(255,255,255,0.45)' },
 });
+
+export default React.memo(HeaderBannerCarousel);

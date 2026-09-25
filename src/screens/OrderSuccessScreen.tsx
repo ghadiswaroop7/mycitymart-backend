@@ -4,12 +4,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { HugeIcon } from '../components/HugeIcon';
 import { Tick01Icon, ArrowRightIcon, ShoppingCart01Icon } from '@hugeicons/core-free-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { useLiveOrderTracking } from '../hooks/useLiveOrderTracking';
 
 export default function OrderSuccessScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { orderId } = route.params || { orderId: 'ORD-UNKNOWN' };
   
+  const { order, statusLabel } = useLiveOrderTracking(orderId);
+
   const scaleValue = useRef(new Animated.Value(0)).current;
   const opacityValue = useRef(new Animated.Value(0)).current;
 
@@ -45,10 +48,20 @@ export default function OrderSuccessScreen() {
             Thank you for shopping with BazarPeth. Your order is being processed.
           </Text>
 
-          <View className="bg-zinc-50 border border-zinc-200 px-6 py-3 rounded-xl mb-10 w-full flex-row justify-between items-center">
+          <View className="bg-zinc-50 border border-zinc-200 px-6 py-3 rounded-xl mb-4 w-full flex-row justify-between items-center">
             <Text className="text-zinc-500 font-bold">Order ID:</Text>
             <Text className="font-black text-[#1C1C1C]">{orderId.substring(0, 8).toUpperCase()}</Text>
           </View>
+
+          {order && (
+            <View className="bg-green-50 border border-green-200 px-4 py-2.5 rounded-xl mb-6 w-full flex-row items-center justify-between">
+              <View className="flex-row items-center">
+                <View className="w-2.5 h-2.5 rounded-full bg-[#008B45] mr-2" />
+                <Text className="text-xs font-bold text-zinc-600">Live Status</Text>
+              </View>
+              <Text className="text-xs font-black text-[#008B45]">{statusLabel}</Text>
+            </View>
+          )}
 
           <TouchableOpacity 
             onPress={() => navigation.navigate('DeliveryTracking', { orderId })}

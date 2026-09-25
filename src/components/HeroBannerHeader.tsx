@@ -4,7 +4,7 @@ import {
   Pressable, Platform 
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { Video, ResizeMode } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useNavigation } from '@react-navigation/native';
@@ -22,6 +22,24 @@ const getYoutubeId = (url: string) => {
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
   const match = url.match(regExp);
   return (match && match[2].length === 11) ? match[2] : null;
+};
+
+// Native Video Loop Player via expo-video (Expo 56+)
+const NativeBannerVideo = ({ source, style }: { source: string; style: any }) => {
+  const player = useVideoPlayer(source, p => {
+    p.loop = true;
+    p.muted = true;
+    p.play();
+  });
+
+  return (
+    <VideoView
+      player={player}
+      style={style}
+      contentFit="cover"
+      nativeControls={false}
+    />
+  );
 };
 
 // Universal Video / GIF / Image / YouTube player component
@@ -85,17 +103,7 @@ const UniversalMedia = ({
         />
       );
     }
-    return (
-      <Video
-        source={{ uri: source }}
-        style={style}
-        resizeMode={ResizeMode.COVER}
-        isLooping
-        shouldPlay
-        isMuted
-        useNativeControls={false}
-      />
-    );
+    return <NativeBannerVideo source={source} style={style} />;
   }
 
   // 3. High-Speed Animated GIF / WebP / Image

@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import SafeImage from './SafeImage';
 import { handleSDUILink } from '../utils/sduiNavigation';
+import { CATEGORY_FALLBACK_IMAGES } from '../utils/productImages';
 
 export interface CategoryGridItem {
   id?: string;
@@ -18,7 +19,7 @@ interface Props {
   title?: string;
 }
 
-export default function ExploreCategoriesGrid({ items = [], title = 'Explore by Category' }: Props) {
+function ExploreCategoriesGrid({ items = [], title = 'Explore by Category' }: Props) {
   const navigation = useNavigation<any>();
 
   if (!items || items.length === 0) return null;
@@ -31,7 +32,9 @@ export default function ExploreCategoriesGrid({ items = [], title = 'Explore by 
       </View>
       <View style={styles.gridContainer}>
         {items.map((item, index) => {
-          const imageUri = item.imageUrl || item.image || 'https://via.placeholder.com/200';
+          const titleKey = (item.title || '').toLowerCase();
+          const fallback = Object.entries(CATEGORY_FALLBACK_IMAGES).find(([k]) => titleKey.includes(k))?.[1];
+          const imageUri = item.imageUrl || item.image || fallback;
           const link = item.link || (item.id ? `category/${item.id}` : 'category/women');
 
           return (
@@ -42,7 +45,12 @@ export default function ExploreCategoriesGrid({ items = [], title = 'Explore by 
               style={styles.gridCard}
             >
               <View style={styles.imageWrapper}>
-                <SafeImage uri={imageUri} style={styles.cardImage} resizeMode="cover" />
+                <SafeImage
+                  uri={imageUri}
+                  style={styles.cardImage}
+                  resizeMode="cover"
+                  fallbackText={item.title}
+                />
                 {item.tag ? (
                   <View style={styles.tagBadge}>
                     <Text style={styles.tagText}>{item.tag}</Text>
@@ -135,3 +143,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
+export default React.memo(ExploreCategoriesGrid);

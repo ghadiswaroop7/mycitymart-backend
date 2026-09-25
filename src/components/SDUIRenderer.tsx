@@ -72,28 +72,42 @@ export default function SDUIRenderer({ blocks = [], cardShapeSettings }: Props) 
                 key={block.id}
                 activeOpacity={0.9}
                 onPress={() => handleSDUILink('cart', navigation)}
-                style={[styles.card, { backgroundColor: '#1A132F', borderColor: '#F59E0B', borderWidth: 1 }]}
+                style={[styles.card, { backgroundColor: '#FFF7ED', borderColor: '#EA580C', borderWidth: 1.5 }]}
               >
                 <View style={styles.rowBetween}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <HugeIcon icon={FlashIcon} size={16} color="#FBBF24" fill="#FBBF24" />
-                    <Text style={{ color: '#FBBF24', fontFamily: 'Poppins_700Bold', fontSize: 13 }}>
-                      {block.data?.title || block.title || '10-15 Mins Superfast Delivery'}
+                    <HugeIcon icon={FlashIcon} size={16} color="#EA580C" fill="#EA580C" />
+                    <Text style={{ color: '#9A3412', fontFamily: 'Poppins_700Bold', fontSize: 13 }}>
+                      {block.data?.title || block.title || '⚡ 10-15 Mins Superfast Delivery'}
                     </Text>
                   </View>
-                  <View style={styles.amberBadge}>
-                    <Text style={{ fontSize: 9, fontFamily: 'Poppins_800ExtraBold', color: '#000' }}>
+                  <View style={[styles.amberBadge, { backgroundColor: '#EA580C' }]}>
+                    <Text style={{ fontSize: 9, fontFamily: 'Poppins_800ExtraBold', color: '#FFF' }}>
                       {block.data?.badgeText || 'EXPRESS'}
                     </Text>
                   </View>
                 </View>
-                <View style={styles.progressBarBg}>
-                  <View style={[styles.progressBarFill, { width: '75%' }]} />
+                <View style={[styles.progressBarBg, { backgroundColor: '#FED7AA' }]}>
+                  <View style={[styles.progressBarFill, { width: '52%', backgroundColor: '#EA580C' }]} />
                 </View>
-                <Text style={{ color: '#CBD5E1', fontSize: 11, fontFamily: 'Poppins_400Regular' }}>
-                  {block.data?.subtitle || block.subtitle || 'Add ₹150 more to unlock FREE instant delivery'}
+                <Text style={{ color: '#C2410C', fontSize: 11, fontFamily: 'Poppins_600SemiBold' }}>
+                  {block.data?.subtitle || block.subtitle || 'Add ₹140 more to unlock FREE Instant Delivery'}
                 </Text>
               </TouchableOpacity>
+            );
+
+          case 'zone_divider':
+          case 'physical_divider':
+            return (
+              <View key={block.id} style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 10, paddingHorizontal: 4 }}>
+                <View style={{ flex: 1, height: 1.5, backgroundColor: 'rgba(245,158,11,0.4)' }} />
+                <View style={{ backgroundColor: '#1E1B4B', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, borderWidth: 1, borderColor: '#F59E0B', marginHorizontal: 8 }}>
+                  <Text style={{ color: '#FDE68A', fontSize: 9, fontFamily: 'Poppins_800ExtraBold', letterSpacing: 0.5 }}>
+                    ✦ BOUTIQUE & HERITAGE MARKETPLACE ✦
+                  </Text>
+                </View>
+                <View style={{ flex: 1, height: 1.5, backgroundColor: 'rgba(245,158,11,0.4)' }} />
+              </View>
             );
 
           // 2. FRESH AT ₹5 / BUDGET STRIP (ZEPTO / BLINKIT STYLE)
@@ -306,6 +320,18 @@ export default function SDUIRenderer({ blocks = [], cardShapeSettings }: Props) 
                       {item.price ? <Text style={{ color: '#F59E0B', fontFamily: 'Poppins_700Bold', fontSize: 12, paddingHorizontal: 4 }}>{item.price}</Text> : null}
                     </TouchableOpacity>
                   ))}
+                </View>
+
+                {/* Handcrafted Delivery Microcopy (NO X-min language for Boutique) */}
+                <View style={{ marginTop: 10, paddingVertical: 5, paddingHorizontal: 8, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)', alignItems: 'center' }}>
+                  <Text style={{ color: '#FDE68A', fontSize: 9.5, fontFamily: 'Poppins_600SemiBold' }}>
+                    🚚 Delivery in 2-4 days, handcrafted to order
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingHorizontal: 2 }}>
+                  <Text style={{ color: '#FBBF24', fontSize: 8.5, fontFamily: 'Poppins_600SemiBold' }}>🛡️ 100% Genuine</Text>
+                  <Text style={{ color: '#FBBF24', fontSize: 8.5, fontFamily: 'Poppins_600SemiBold' }}>🔄 7 Days Return</Text>
+                  <Text style={{ color: '#FBBF24', fontSize: 8.5, fontFamily: 'Poppins_600SemiBold' }}>📦 Express Delivery</Text>
                 </View>
               </View>
             );

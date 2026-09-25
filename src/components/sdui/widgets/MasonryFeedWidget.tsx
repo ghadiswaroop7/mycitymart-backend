@@ -7,6 +7,7 @@ import { useDispatch } from 'react-redux';
 import { addToCart } from '../../../store/slices/cartSlice';
 import SafeImage from '../../SafeImage';
 import type { MasonryFeedData } from '../../../types/sdui';
+import { doesProductBelongToCategory } from '../../../utils/productClassifier';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const COLUMN_GAP = 10;
@@ -61,6 +62,10 @@ export default function MasonryFeedWidget({ data }: Props) {
           }
           const snap = await getDocs(q);
           snap.forEach((doc) => fetchedProducts.push({ id: doc.id, ...doc.data() }));
+
+          if (data?.categoryFilter) {
+            fetchedProducts = fetchedProducts.filter(p => doesProductBelongToCategory(p, data.categoryFilter!));
+          }
         }
 
         setProducts(fetchedProducts);

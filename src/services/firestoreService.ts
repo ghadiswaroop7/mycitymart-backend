@@ -1,14 +1,21 @@
 import { db } from '../config/firebase';
-import { collection, doc, getDoc, getDocs, query, where, addDoc, updateDoc, serverTimestamp, setDoc, onSnapshot, orderBy, deleteDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where, addDoc, updateDoc, serverTimestamp, setDoc, onSnapshot, orderBy, deleteDoc, increment, writeBatch } from 'firebase/firestore';
 import { Review } from '../store/slices/reviewSlice';
 import { CartItem } from '../store/slices/cartSlice';
 import { Coupon } from '../store/slices/couponSlice';
+import { getProductImage } from '../utils/productImages';
 
 export const getProductById = async (productId: string): Promise<any> => {
   const docRef = doc(db, 'products', productId);
   const docSnap = await getDoc(docRef);
   if (docSnap.exists()) {
-    return { id: docSnap.id, ...docSnap.data() };
+    const data: any = docSnap.data();
+    const resolvedImage = getProductImage(data);
+    return {
+      id: docSnap.id,
+      ...data,
+      imageUrl: resolvedImage || data.imageUrl,
+    };
   }
   return null;
 };
@@ -23,7 +30,13 @@ export const getRelatedProducts = async (category: string, currentProductId: str
   const products: any[] = [];
   querySnapshot.forEach((doc) => {
     if (doc.id !== currentProductId) {
-      products.push({ id: doc.id, ...doc.data() });
+      const data: any = doc.data();
+      const resolvedImage = getProductImage(data);
+      products.push({
+        id: doc.id,
+        ...data,
+        imageUrl: resolvedImage || data.imageUrl,
+      });
     }
   });
   return products.slice(0, 6);
@@ -215,17 +228,79 @@ export const saveUserPushToken = async (uid: string, token: string) => {
 // ORDERS API
 // ----------------------------------------------------------------------
 export const createOrder = async (orderData: any) => {
-  // Firestore strictly rejects `undefined` values in nested objects/arrays.
-  // We use JSON parse/stringify to cleanly strip all undefined properties from the payload.
-  const cleanOrderData = JSON.parse(JSON.stringify(orderData));
+  // Extract primary shopId if available, fallback to first item's shopId
+  const primaryShopId = orderData.shopId || orderData.items?.[0]?.shopId || orderData.items?.[0]?.sellerId || 'default_shop';
+  const customerId = orderData.customerId || orderData.userId || 'anonymous';
 
-  const docRef = await addDoc(collection(db, 'orders'), {
-    ...cleanOrderData,
+  // Format and normalize items array to ensure productId, shopId, price, quantity are properly mapped
+  const formattedItems = Array.isArray(orderData.items)
+    ? orderData.items.map((item: any) => ({
+        id: item.id || item.productId || '',
+        productId: item.productId || item.id || '',
+        name: item.name || item.title || 'Product',
+        price: Number(item.price) || 0,
+        quantity: Number(item.quantity) || 1,
+        image: item.image || item.imageUrl || item.images?.[0] || '',
+        shopId: item.shopId || item.sellerId || primaryShopId,
+        category: item.category || '',
+        selectedVariant: item.selectedVariant || null,
+        selectedVariants: item.selectedVariants || null,
+        variant: item.variant || null,
+      }))
+    : [];
+
+  // Clean and prepare final order payload compatible with Seller App & Admin Panel
+  const cleanOrderPayload = {
+    ...JSON.parse(JSON.stringify(orderData)),
+    shopId: primaryShopId,
+    customerId: customerId,
+    userId: customerId,
+    items: formattedItems,
+    status: orderData.status || 'pending',
+    totalAmount: Number(orderData.totalAmount) || 0,
+    subtotal: Number(orderData.subtotal) || 0,
+    tax: Number(orderData.tax) || 0,
+    deliveryFee: Number(orderData.deliveryFee) || 0,
+    discountAmount: Number(orderData.discountAmount) || 0,
+    customerLocation: orderData.customerLocation || {
+      latitude: orderData.shippingAddress?.latitude || orderData.shippingAddress?.lat || 21.1458,
+      longitude: orderData.shippingAddress?.longitude || orderData.shippingAddress?.lng || 79.0882,
+      address: orderData.shippingAddress?.addressLine1 || 'Customer Delivery Address'
+    },
+    paymentMethod: orderData.paymentMethod || 'cod',
+    paymentStatus: orderData.paymentStatus || (orderData.paymentMethod === 'online' ? 'paid' : 'pending'),
     createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  });
+    updatedAt: serverTimestamp(),
+  };
+
+  const docRef = await addDoc(collection(db, 'orders'), cleanOrderPayload);
+
+  // ----------------------------------------------------------------------
+  // LIVE INVENTORY HANDSHAKE: Decrement stock in shared 'products' collection
+  // ----------------------------------------------------------------------
+  if (formattedItems.length > 0) {
+    try {
+      const batch = writeBatch(db);
+      for (const item of formattedItems) {
+        const prodId = item.productId || item.id;
+        const qty = Number(item.quantity) || 1;
+        if (prodId) {
+          const productRef = doc(db, 'products', prodId);
+          batch.update(productRef, {
+            stock: increment(-qty),
+            updatedAt: serverTimestamp()
+          });
+        }
+      }
+      await batch.commit();
+    } catch (stockErr) {
+      console.warn('[InventoryHandshake] Stock decrement skipped or encountered non-critical error:', stockErr);
+    }
+  }
+
   return docRef.id;
 };
+
 
 export const getUserOrders = async (uid: string) => {
   const q = query(
@@ -339,24 +414,87 @@ export const setDefaultAddress = async (uid: string, addressId: string) => {
 // ----------------------------------------------------------------------
 // PRODUCTS API
 // ----------------------------------------------------------------------
-export const getProducts = async (city?: string) => {
+export interface ProductQueryResult extends Array<any> {
+  hasCityCoverage?: boolean;
+  emptyCityState?: boolean;
+  targetCity?: string;
+  totalBeforeFilter?: number;
+}
+
+export const getProducts = async (city?: string): Promise<ProductQueryResult> => {
   try {
     const snapshot = await getDocs(query(collection(db, 'products')));
-    let products = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-    if (city) {
-      products = products.filter((p: any) => !p.city || p.city === city || p.city === 'global' || p.city === 'national');
+    const allProducts = snapshot.docs.map(doc => {
+      const data: any = doc.data();
+      const resolvedImage = getProductImage(data);
+      return {
+        id: doc.id,
+        ...data,
+        imageUrl: resolvedImage || data.imageUrl,
+      };
+    });
+
+    let filtered = allProducts;
+    if (city && city.trim()) {
+      const target = city.toLowerCase().trim();
+      filtered = allProducts.filter((p: any) => {
+        // 1. Multi-city check via cities array
+        if (Array.isArray(p.cities) && p.cities.length > 0) {
+          const match = p.cities.some((c: string) => {
+            if (!c || typeof c !== 'string') return false;
+            const cl = c.toLowerCase().trim();
+            return cl === target || cl === 'global' || cl === 'national' || cl === 'all' || cl === '*';
+          });
+          if (match) return true;
+        }
+
+        // 2. Single-city check via p.city
+        if (p.city && typeof p.city === 'string') {
+          const pc = p.city.toLowerCase().trim();
+          return pc === target || pc === 'global' || pc === 'national' || pc === 'all' || pc === '*';
+        }
+
+        // Untagged/legacy products are excluded from city-specific filters
+        // Only explicit opt-in 'global'/'national' items show across all cities
+        return false;
+      });
     }
-    return products.sort((a: any, b: any) => {
+
+    const sorted: ProductQueryResult = filtered.sort((a: any, b: any) => {
       const timeA = a.createdAt?.seconds || a.createdAt?.toMillis?.() || 0;
       const timeB = b.createdAt?.seconds || b.createdAt?.toMillis?.() || 0;
       return timeB - timeA;
     });
+
+    const hasCity = !!(city && city.trim());
+    Object.defineProperty(sorted, 'hasCityCoverage', {
+      value: sorted.length > 0,
+      enumerable: false,
+      writable: true,
+    });
+    Object.defineProperty(sorted, 'emptyCityState', {
+      value: hasCity && sorted.length === 0,
+      enumerable: false,
+      writable: true,
+    });
+    Object.defineProperty(sorted, 'targetCity', {
+      value: city || 'all',
+      enumerable: false,
+      writable: true,
+    });
+    Object.defineProperty(sorted, 'totalBeforeFilter', {
+      value: allProducts.length,
+      enumerable: false,
+      writable: true,
+    });
+
+    return sorted;
   } catch (error) {
     console.error('getProducts error:', error);
-    return [];
+    const emptyResult: ProductQueryResult = [];
+    Object.defineProperty(emptyResult, 'hasCityCoverage', { value: false, enumerable: false });
+    Object.defineProperty(emptyResult, 'emptyCityState', { value: true, enumerable: false });
+    return emptyResult;
   }
 };
 
@@ -370,8 +508,18 @@ export const getLocalShops = async (city?: string) => {
       id: doc.id,
       ...doc.data()
     }));
-    if (city) {
-      shops = shops.filter((s: any) => !s.city || s.city === city || s.city === 'global' || s.city === 'national');
+    if (city && city.trim()) {
+      const target = city.toLowerCase().trim();
+      shops = shops.filter((s: any) => {
+        const serviceable = Array.isArray(s.serviceableCities) ? s.serviceableCities : (Array.isArray(s.serviceableAreas) ? s.serviceableAreas : []);
+        if (serviceable.some((c: string) => (c || '').toLowerCase().trim() === target)) {
+          return true;
+        }
+        const sc = (s.city || '').toLowerCase().trim();
+        if (sc === target || sc === 'global' || sc === 'national') return true;
+        if (!sc && s.address && s.address.toLowerCase().includes(target)) return true;
+        return false;
+      });
     }
     return shops;
   } catch (error) {
@@ -379,6 +527,7 @@ export const getLocalShops = async (city?: string) => {
     return [];
   }
 };
+
 
 export const createSampleBanners = async () => {
   const sampleBanners = [
